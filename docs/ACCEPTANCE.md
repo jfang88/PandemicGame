@@ -52,6 +52,13 @@ These are independent test oracles, not implementation-derived snapshots. T02–
 | S07 | Oversized request, excessive creates/joins/commands, unsafe display name | Bounded rejection/rate limit; text escaped; no server/HTML injection |
 | S08 | Old invite after rotation / nonowner rotate / late join | Rejected; owner duplicate rotation can recover same result privately |
 
+Firebase-specific security scenarios (add to the release traceability matrix):
+
+| ID | Given / when | Required result |
+| --- | --- | --- |
+| S09 | Valid signed token with opaque non-UUID UID; then wrong project, wrong/missing aud/iss/iat/auth_time/sub, future times, unsigned/emulator token, HS256 or provider access token | Valid Firebase UID accepted; all invalid identities rejected before room dispatch; configured project issuer/audience mandatory |
+| S10 | Certificate cache expiry, rotation, unknown kid, malicious jku, concurrent key fetches, timeout/unavailable key endpoint | Fixed Google endpoint only; cache respects max-age; bounded deduplicated refresh; known valid cached key works until expiry; unverified requests fail closed |
+
 ## End-to-end and operations
 
 | ID | Given / when | Required result |
@@ -67,3 +74,9 @@ These are independent test oracles, not implementation-derived snapshots. T02–
 | O05 | Preview versus production configuration | Independent namespaces and identities; no untrusted-PR secrets/deploy |
 
 U01 can use deterministic local fixture seeds/near-terminal scenarios for reliable coverage, but also run at least one full setup-to-terminal match for each player count. Record manual cooperative playtest observations separately from scripted bots; legal randomized play is not a balance assessment.
+
+| ID | Given / when | Required result |
+| --- | --- | --- |
+| U05 | Firebase popup on actual Cloudflare origin in Chromium and tablet Safari/WebKit; popup blocked/cancelled, identity collision, refreshed token, invite return | Both providers work with authorized-domain setup; safe recovery without secret/fragment leakage; no custom OAuth exchange or silent broken redirect fallback |
+
+U05 real-provider validation belongs to T17; T11/T15 test its local UI behavior. Include S09/S10/U05 in T18 traceability. All preview/production tests reject Firebase Auth Emulator tokens/configuration.

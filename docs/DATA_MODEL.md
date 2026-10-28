@@ -51,3 +51,7 @@ Schema migration runs once on initialization using serialized startup and a tran
 ## Recovery scope
 
 Persistence tests prove process/hibernation durability, not independent backup. Before production, document actual Cloudflare restore capabilities and rehearse a supported recovery path in preview. MVP accepts loss of casual game history if independent backups are not configured; do not promise disaster recovery. Public JSON export is a player-visible summary, not a complete hidden-state backup.
+
+## Identity key contract
+
+All stored `userId`, `ownerUserId` and recipient IDs are the verified Firebase token `sub` (Firebase UID): opaque case-sensitive nonempty strings of at most 128 characters, not UUIDs. Never derive authorization from email, display name or Microsoft/Google provider access tokens. Room IDs and command IDs remain UUIDs. Preview and production pin separate Firebase project IDs; no user migration is required because implementation has not started.

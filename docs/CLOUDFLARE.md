@@ -4,7 +4,7 @@ This is a target runbook. T01 creates executable scripts; T17 validates configur
 
 ## Accounts and local prerequisites
 
-Owner: Cloudflare account with Workers and SQLite Durable Objects available; Supabase project; Microsoft and Google OAuth apps (AUTH.md). A custom domain is optional: use the Worker-provided HTTPS URL first. Paid-plan upgrade is optional and an owner billing decision.
+Owner: Cloudflare account with Workers and SQLite Durable Objects available; Firebase Spark project; Microsoft OAuth app and enabled Google provider (AUTH.md). A custom domain is optional: use the Worker-provided HTTPS URL first. Paid-plan upgrade is optional and an owner billing decision.
 
 Agent: choose a supported Node LTS compatible with current Vite/Wrangler, pin it in .nvmrc and CI, create npm workspaces and package-lock.json. Do not install a globally floating CLI. Use the locally pinned Wrangler through npm scripts. Cloudflare's Workers Vitest integration should match the pinned Vitest version.
 
@@ -43,18 +43,23 @@ See [../config/wrangler.example.jsonc](../config/wrangler.example.jsonc). It is 
 | --- | --- | --- |
 | CLOUDFLARE_ACCOUNT_ID | CI environment / local deployment context | Identifier, not a credential |
 | CLOUDFLARE_API_TOKEN | GitHub environment secret | Yes; scoped only to deployment needs for this account |
-| SUPABASE_URL | Worker vars and frontend VITE_SUPABASE_URL | Public project URL |
-| SUPABASE_PUBLISHABLE_KEY | Frontend VITE_SUPABASE_PUBLISHABLE_KEY | Public publishable key only |
-| SUPABASE_JWT_ISSUER / SUPABASE_JWT_AUDIENCE | Worker vars | Public; issuer is pinned project's /auth/v1; audience authenticated |
-| ALLOWED_ORIGIN | Worker vars | Exact deployed origin |
+| FIREBASE_PROJECT_ID | Worker vars and frontend VITE_FIREBASE_PROJECT_ID | Public project identifier; exact JWT audience |
+| VITE_FIREBASE_API_KEY | Frontend build-time config | Public Web SDK API key; not an authorization secret |
+| VITE_FIREBASE_AUTH_DOMAIN | Frontend build-time config | Firebase auth helper host, usually project-id.firebaseapp.com |
+| VITE_FIREBASE_APP_ID | Frontend build-time config | Public Firebase Web app identifier |
+| ALLOWED_ORIGIN | Worker vars | Exact deployed app origin |
 | APP_ENV | Worker vars | preview or production; test bypass never accepted |
-| Microsoft/Google client secrets | Supabase provider dashboard only | Yes; never in repository, frontend or Worker |
+| Microsoft OAuth client secret | Firebase Microsoft provider dashboard only | Secret; never in repository, frontend or Worker |
 
-Use asymmetric Supabase JWT signing keys and project JWKS URL `/auth/v1/.well-known/jwks.json`. Validate actual issuer/audience against a real staging token. Do not silently accept arbitrary Supabase projects. No Supabase service-role key is needed by this architecture. .dev.vars and .env.local stay ignored; commit placeholder examples only. Build-time VITE variables must be rebuilt for each environment, not assumed to follow Wrangler vars.
+The Worker derives issuer `https://securetoken.google.com/<FIREBASE_PROJECT_ID>` and audience from the configured project ID, never from untrusted token claims. It verifies Firebase ID tokens using Google's fixed public X.509 certificate endpoint and RS256; see AUTH.md. Do not use a project-local JWKS endpoint or require service-account credentials. Google sign-in is enabled through Firebase's provider settings. Keep .dev.vars/.env.local ignored; commit placeholder examples only. VITE variables require an environment-specific rebuild and must match the Worker's Firebase project.
+
+Firebase SDK popup authentication is the default for this Cloudflare-hosted SPA. Register exact authorized domains and the Firebase-provided Microsoft callback `/__/auth/handler`. There is no application OAuth code-exchange `/auth/callback` route to build. Do not enable untested redirect fallback; review AUTH.md for browser storage restrictions. Local real-provider login and loopback test identities are separate workflows.
+
+Public frontend placeholders: [config/firebase.env.example](../config/firebase.env.example). Copy values into ignored local env or environment-specific CI build variables. This file is not consumed automatically.
 
 ## Preview deployment
 
-1. Configure real preview identity project and callback allowlists. Use a stable preview Worker URL, not an unbounded OAuth wildcard.
+1. Configure the real preview Firebase Spark project, enabled providers and authorized domains. Use a stable preview Worker URL, not an unbounded OAuth wildcard.
 2. Authenticate locally with Wrangler login, or supply scoped account/token credentials to the trusted CI environment. Never print tokens in logs.
 3. Run the full applicable tests, production-artifact bypass scan and build.
 4. Run deploy:preview. Record resulting URL, commit SHA, Worker name, migration tag and rules/schema versions.
@@ -69,4 +74,4 @@ T17: workflow_dispatch with preview or production input, trusted main-branch com
 
 ## Production and rollback
 
-Owner triggers production after T18 evidence passes. Confirm production OAuth redirects and independent secrets/bindings, then deploy the tested commit. Perform smoke tests with normal accounts. Record release SHA/URL and schema version. Rollback uses the previous known-good Worker version only if it can read current schema/rules; otherwise use a forward fix. Do not revert storage migrations by deleting objects. Test recovery in preview before release, including hibernating rooms and ongoing games across an update.
+Owner triggers production after T18 evidence passes. Confirm production Firebase authorized domains and Microsoft callback and independent secrets/bindings, then deploy the tested commit. Perform smoke tests with normal accounts. Record release SHA/URL and schema version. Rollback uses the previous known-good Worker version only if it can read current schema/rules; otherwise use a forward fix. Do not revert storage migrations by deleting objects. Test recovery in preview before release, including hibernating rooms and ongoing games across an update.

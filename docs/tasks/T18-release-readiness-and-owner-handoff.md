@@ -19,6 +19,7 @@ Status: not started. Dependencies: T17.
 
 - All required E/P/S/U/O criteria have passing evidence; no critical/high defects unresolved; O04 recovery rehearsal recorded.
 - Fresh-contributor setup works; owner can deploy the tested commit and verify it. Do not claim production deployment without actual result.
+- Confirm Cloudflare Free + Firebase Spark deployment choice and provider/browser checks; no billing upgrade was silently enabled.
 
 ## Checks
 

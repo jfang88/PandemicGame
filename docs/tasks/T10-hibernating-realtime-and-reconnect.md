@@ -18,6 +18,7 @@ Status: not started. Dependencies: T09.
 
 - P05/P06/S03/S04 and transport portions U02 pass locally; no always-running JS timers on server.
 - Commands remain HTTPS-only; lost updates recovered by snapshot; expired idle sockets lose access.
+- Socket auth expiry derives from verified Firebase ID-token exp, and refreshed reconnect retains user UID.
 
 ## Checks
 

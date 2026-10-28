@@ -19,6 +19,7 @@ Status: not started. Dependencies: T06.
 
 - State survives re-instantiation with identical decks/RNG; public projection excludes all secret fields.
 - Unknown schema/protocol versions fail clearly; SQL parameters and API body validation work; O01 routes testable locally.
+- Protocol user IDs accept opaque Firebase UIDs (not UUID-only); only room/command IDs require UUID format.
 
 ## Checks
 

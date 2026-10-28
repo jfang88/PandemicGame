@@ -8,7 +8,7 @@ Room owner is the creator and has lobby start/rotate-invite authority only, not 
 
 ## UI surfaces
 
-- Sign-in/callback with useful provider error and retry states.
+- Firebase popup sign-in with useful provider error, blocked/cancelled popup and retry states.
 - Home: create room, paste invite URL; locally remembered recent room links (not a global room listing).
 - Lobby: seats, sanitized display names, role selection, ready status, invite copy, start disabled with explanation.
 - Game: responsive SVG board, all player locations, threat markers plus non-color symbols, research centers, all hands, role help, active-player/phase banner, remaining actions, supplies, outbreak counter and deck counts.
@@ -27,3 +27,7 @@ Official Pandemic assets/text or exact rules parity, AI players, matchmaking, ch
 ## Success definition
 
 A fresh contributor can clone, install, run and test locally; an owner can configure accounts and deploy from the runbook; four invited users can play a complete saved game. Performance and balance claims require recorded measurements/playtests.
+
+## Deployment baseline
+
+Primary expected use is two people playing occasionally. Keep the original 2–4-player requirement, with Cloudflare Free and Firebase Authentication Spark as defaults. Use Microsoft personal accounts and Google social login; no enterprise SSO subscription. No Firebase database or paid login subscription is required for this scope.

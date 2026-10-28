@@ -10,7 +10,8 @@
     "deliverables": [
       "Create npm workspaces for web, worker, engine and protocol; strict TypeScript, compatible pinned dependencies, one lockfile, Node version pin and lint configuration.",
       "Create minimal real React screen, Worker health route and pure package smoke tests; no game or public deployment yet.",
-      "Add root lint/typecheck/test:unit/build/check:docs scripts, local dev instructions, secret-safe ignore/example files, and PR GitHub Actions with read-only permissions. Document later test scripts as unavailable until their tasks."
+      "Add root lint/typecheck/test:unit/build/check:docs scripts, local dev instructions, secret-safe ignore/example files, and PR GitHub Actions with read-only permissions. Document later test scripts as unavailable until their tasks.",
+      "Reserve Firebase public frontend config and FIREBASE_PROJECT_ID Worker config only; do not add Firebase databases, Admin SDK credentials or paid Firebase services."
     ],
     "acceptance": [
       "Fresh clone + npm ci + lint + typecheck + test:unit + build + check:docs pass.",
@@ -165,7 +166,8 @@
     ],
     "acceptance": [
       "State survives re-instantiation with identical decks/RNG; public projection excludes all secret fields.",
-      "Unknown schema/protocol versions fail clearly; SQL parameters and API body validation work; O01 routes testable locally."
+      "Unknown schema/protocol versions fail clearly; SQL parameters and API body validation work; O01 routes testable locally.",
+      "Protocol user IDs accept opaque Firebase UIDs (not UUID-only); only room/command IDs require UUID format."
     ],
     "checks": [
       "Workerd/SQLite integration tests and projection leakage tests; unit/typecheck/build."
@@ -241,7 +243,8 @@
     ],
     "acceptance": [
       "P05/P06/S03/S04 and transport portions U02 pass locally; no always-running JS timers on server.",
-      "Commands remain HTTPS-only; lost updates recovered by snapshot; expired idle sockets lose access."
+      "Commands remain HTTPS-only; lost updates recovered by snapshot; expired idle sockets lose access.",
+      "Socket auth expiry derives from verified Firebase ID-token exp, and refreshed reconnect retains user UID."
     ],
     "checks": [
       "Cloudflare socket integration tests, client transport unit tests, hibernation staging checks explicitly pending T17."
@@ -261,16 +264,16 @@
       "docs/ACCEPTANCE.md"
     ],
     "deliverables": [
-      "Implement Supabase PKCE login/callback/logout, safe room return path and short-lived invite fragment handling.",
-      "Implement Worker JWT verifier with fixed JWKS issuer/audience/algorithm/expiry and rotation handling; derive actor from sub.",
-      "Ensure preview/production has no test identity entry point or signing keys; add setup templates and provider-check evidence sheet."
+      "Implement Firebase Web SDK Google/Microsoft popup login/logout, auth initialization, safe room return path, token refresh and short-lived invite fragment handling on the Spark plan.",
+      "Implement a Workers-compatible RS256 Firebase ID-token verifier using Google Secure Token X.509 certificates, pinned project issuer/audience and required time claims; derive opaque non-UUID actor UID from sub. Cache/import keys and test rotation/fetch failure.",
+      "Exclude local test keys and Firebase Auth Emulator bypasses from preview/production. Add public-config templates, popup/collision recovery UI and real-provider-check evidence sheet. No Admin SDK service account or Firebase game database."
     ],
     "acceptance": [
-      "S01/S02/S05/S06 pass; no email-based authorization or open redirect; token refresh retries preserve command ID.",
-      "T11 completes on automated auth/code gates; track U03 real-provider verification explicitly under T17. Missing account credentials block T17 external checks and production release, not the local T11 implementation."
+      "S01/S02/S05/S06/S09/S10 pass; no email-based authorization or open redirect; refresh retries preserve command ID.",
+      "T11 completes on automated auth/code gates; track U03/U05 real-provider/browser verification explicitly under T17. Missing account credentials block T17 external checks and production release, not local T11 implementation."
     ],
     "checks": [
-      "JWT negative/rotation tests, production-artifact bypass test, callback unit/browser smoke; real OAuth staging evidence at T17."
+      "Firebase-shaped JWT negative/rotation/cache tests, non-UUID UID test, production/emulator bypass test, popup browser smoke; actual Google/Hotmail staging evidence at T17."
     ],
     "file": "docs/tasks/T11-microsoft-google-auth-and-authorization.md"
   },
@@ -315,7 +318,8 @@
     "deliverables": [
       "Connect login/home/invite/lobby/role/readiness/start screens to authenticated API.",
       "Swap local adapter for network transport in deployed app; render server snapshots and pending/rejected actions.",
-      "Add private recent-room links, safe error states, connection/session banners and bounded public history."
+      "Add private recent-room links, safe error states, connection/session banners and bounded public history.",
+      "Integrate Firebase popup login; handle blocked/cancelled popup and account-collision recovery without custom code exchange or untested redirect fallback."
     ],
     "acceptance": [
       "2/3/4 separate identities join and play synchronized turns; nonactive players cannot act.",
@@ -364,7 +368,8 @@
     "deliverables": [
       "Add Playwright contexts for 2/3/4 identities and root test:e2e; CI browser setup and sanitized failure artifacts.",
       "Test full games plus near-terminal wins/losses, hand limit, lobby race, offline refresh, duplicate update and expired session.",
-      "Keep fixtures/test identity endpoints only in local harness; map acceptance IDs to named tests."
+      "Keep fixtures/test identity endpoints only in local harness; map acceptance IDs to named tests.",
+      "Cover S09/S10/U05 Firebase claim/cache and popup/emulator cases with local test adapters; reserve actual OAuth/browser evidence for T17."
     ],
     "acceptance": [
       "U01/U02/U04 repeatably pass; at least one full setup-to-terminal run per player count.",
@@ -393,7 +398,8 @@
     ],
     "acceptance": [
       "S05\u2013S07 pass; no secret payloads in logs/traces; limits return useful 429 with Retry-After.",
-      "O02 harness runs locally and is ready for owned preview; performance claims remain pending measured staging results."
+      "O02 harness runs locally and is ready for owned preview; performance claims remain pending measured staging results.",
+      "Measure Worker Free token-verification CPU with certificate/key caching; do not assert $0 compatibility solely from low traffic."
     ],
     "checks": [
       "Limit/security integration tests, bundle scan, local bounded load, independent review report."
@@ -415,11 +421,13 @@
     "deliverables": [
       "Validate/promote Wrangler template, environment bindings/migrations and build-time auth vars against pinned current tools.",
       "Add trusted-main manual preview/production deployment workflow with scoped secrets and environment concurrency; no PR auto-deploy.",
-      "With owner-provided credentials, deploy preview and run OAuth, hibernation, namespace isolation, routing and load checks; document observed URLs and versions."
+      "With owner-provided credentials, deploy preview and run OAuth, hibernation, namespace isolation, routing and load checks; document observed URLs and versions.",
+      "Use Firebase Spark projects with matching Worker/frontend project IDs, public Web SDK config and authorized domains. Verify Google/Hotmail popup on Cloudflare preview in Chromium and Safari/WebKit; do not enable Blaze or use service-account secrets."
     ],
     "acceptance": [
       "O01/O02/O03/O05 and U03 pass in actual preview; no claimed pass when account setup missing.",
-      "Published preview uses real auth, independent resources, no test bypass, and durable state. Production remains untriggered."
+      "Published preview uses real auth, independent resources, no test bypass, and durable state. Production remains untriggered.",
+      "U05/S09/S10 Firebase checks and project isolation pass; no application /auth/callback or obsolete identity variables remain. Record actual free-tier CPU/request usage."
     ],
     "checks": [
       "Full CI, Wrangler validation, actual preview smoke/load, personal Microsoft + Google login and idle observation."
@@ -445,7 +453,8 @@
     ],
     "acceptance": [
       "All required E/P/S/U/O criteria have passing evidence; no critical/high defects unresolved; O04 recovery rehearsal recorded.",
-      "Fresh-contributor setup works; owner can deploy the tested commit and verify it. Do not claim production deployment without actual result."
+      "Fresh-contributor setup works; owner can deploy the tested commit and verify it. Do not claim production deployment without actual result.",
+      "Confirm Cloudflare Free + Firebase Spark deployment choice and provider/browser checks; no billing upgrade was silently enabled."
     ],
     "checks": [
       "Full checks plus manual staging matrix and review; post-deploy smoke only if production is authorized."

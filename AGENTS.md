@@ -21,7 +21,7 @@ Build the 2–4-player game specified here for Cloudflare. Read docs/START_HERE.
 - Persist before acknowledging/broadcasting. Discard uncommitted in-memory candidates on failure.
 - Use the hibernation WebSocket API. Reconstruct identity attachments and room state after hibernation. No always-running heartbeat timer.
 - Use explicit public projections; never serialize the internal state directly to clients or logs.
-- Never put Supabase service-role keys, OAuth client secrets, deployment tokens or test authentication bypasses in frontend assets.
+- Never put Firebase service-account private keys, OAuth client secrets, deployment tokens or test authentication bypasses in frontend assets.
 - Local test authentication is a separate local-only entry point/configuration. Production must reject its tokens; preview uses real authentication.
 - Parameterize SQL; cap inputs, room creation, sockets and command rates. Do not log tokens, invite secrets, tickets, hands or future decks.
 - Never force-push main, delete unrelated work, deploy automatically from untrusted PRs, or change billing/account settings as part of a coding task.
@@ -37,3 +37,7 @@ Dependency versions must be chosen from current official documentation, pinned b
 ## Definition of done
 
 The scoped feature works through its real boundary; meaningful positive and negative tests pass; docs match behavior; no secrets or skipped acceptance tests; required CI passes. Deployment tasks additionally need recorded staging checks and a documented recovery path. A rendered screen or a mocked success response alone is not completion.
+
+## Firebase identity constraints
+
+Use Firebase Authentication Spark and the Web SDK popup flow specified in docs/AUTH.md. Verify RS256 Firebase ID tokens with fixed Google X.509 certificates and configured project claims; never authorize by an unverified decoded token. Treat UID as opaque, not UUID. Do not add Firebase databases/functions, service-account keys, phone auth, Blaze billing, a custom OAuth code-exchange callback, or deployed Firebase Auth Emulator bypasses. No user migration is needed before coding.

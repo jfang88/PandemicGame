@@ -18,6 +18,7 @@ Status: not started. Dependencies: T15.
 
 - S05–S07 pass; no secret payloads in logs/traces; limits return useful 429 with Retry-After.
 - O02 harness runs locally and is ready for owned preview; performance claims remain pending measured staging results.
+- Measure Worker Free token-verification CPU with certificate/key caching; do not assert $0 compatibility solely from low traffic.
 
 ## Checks
 

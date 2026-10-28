@@ -14,11 +14,13 @@ Status: not started. Dependencies: T16.
 - Validate/promote Wrangler template, environment bindings/migrations and build-time auth vars against pinned current tools.
 - Add trusted-main manual preview/production deployment workflow with scoped secrets and environment concurrency; no PR auto-deploy.
 - With owner-provided credentials, deploy preview and run OAuth, hibernation, namespace isolation, routing and load checks; document observed URLs and versions.
+- Use Firebase Spark projects with matching Worker/frontend project IDs, public Web SDK config and authorized domains. Verify Google/Hotmail popup on Cloudflare preview in Chromium and Safari/WebKit; do not enable Blaze or use service-account secrets.
 
 ## Acceptance gate
 
 - O01/O02/O03/O05 and U03 pass in actual preview; no claimed pass when account setup missing.
 - Published preview uses real auth, independent resources, no test bypass, and durable state. Production remains untriggered.
+- U05/S09/S10 Firebase checks and project isolation pass; no application /auth/callback or obsolete identity variables remain. Record actual free-tier CPU/request usage.
 
 ## Checks
 

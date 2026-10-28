@@ -4,7 +4,11 @@
 
 Cloudflare static-asset requests are free/unlimited under published pricing; Worker/API and Durable Object usage have separate limits. SQLite Durable Objects Free includes 100,000 requests/day, 13,000 GB-s/day compute, 5 million rows read/day, 100,000 written/day and 5 GB total stored data. These are per-account/service allowances, not per-room guarantees. Free-limit exhaustion causes errors. Workers Paid starts at $5/month plus usage.
 
-Supabase Free includes social OAuth and 50,000 MAU but may pause projects after a week of inactivity; Pro starts at $25/month. Thus target $0 prototype, $5 base for paid Cloudflare with free auth, or $30 base for paid Cloudflare plus Pro auth. Domains, taxes, additional projects and overages are extra. Recheck SOURCES.md before purchase; this is not a quote or a hard cap.
+Firebase Authentication Spark supplies Google and Microsoft social login at no cost within its published limits, without a linked billing account. Use only Authentication: no phone/SMS, enterprise SAML/OIDC, Firestore, Functions or paid Firebase services are required. Firebase's pricing/product documentation does not specify the weekly inactive-database pause that motivated this identity choice; do not describe this as an uptime SLA or guaranteed permanent free service.
+
+Target $0/month for two occasional players (retain 2–4-player support). Workers Paid, if explicitly chosen after measurements, starts at $5/month plus usage; Firebase social login can remain on Spark. Do not enable Blaze, billing or unrelated products automatically. Domains/taxes are separate. Recheck SOURCES.md before purchase. Workers Free quota exhaustion should be handled as an unavailable response, not an instruction to upgrade billing.
+
+For a planning example, one 300-command match might use 500–1,000 API requests and 1,500–6,000 row writes; measure actual implementation costs. Days between games consume saved-data storage and sparse cleanup work, not continuously running game compute. Test the Worker Free 10 ms CPU-per-invocation budget for token verification/routing as well as aggregate quotas; cache imported signing keys safely.
 
 100 matches × 300 game commands ≈ 30,000 commands/month, before reads, joins, retries and sockets. Each command can write multiple rows (state, receipt, events). Measure actual writes, duration and bandwidth; do not equate command count to billed requests. Hibernating idle rooms is the main realtime cost safeguard.
 

@@ -13,6 +13,7 @@ Status: not started. Dependencies: T11, T12.
 - Connect login/home/invite/lobby/role/readiness/start screens to authenticated API.
 - Swap local adapter for network transport in deployed app; render server snapshots and pending/rejected actions.
 - Add private recent-room links, safe error states, connection/session banners and bounded public history.
+- Integrate Firebase popup login; handle blocked/cancelled popup and account-collision recovery without custom code exchange or untested redirect fallback.
 
 ## Acceptance gate
 

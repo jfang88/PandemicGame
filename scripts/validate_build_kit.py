@@ -47,6 +47,22 @@ for task in tasks:
     assert task['acceptance'] and task['deliverables'] and task['checks']
     completed.add(task['id'])
 
+# Keep the provider switch consistent before any coding agent starts.
+legacy = 'supa' + 'base'
+for path in root.rglob('*'):
+    if path.is_file() and path.suffix in ('.md', '.json', '.jsonc'):
+        assert legacy not in path.read_text().lower(), f'Obsolete provider reference: {path}'
+config_text = (root / 'config/wrangler.example.jsonc').read_text()
+config = json.loads(re.sub(r'^\s*//.*$', '', config_text, flags=re.M))
+for env in ('preview', 'production'):
+    assert 'FIREBASE_PROJECT_ID' in config['env'][env]['vars']
+    assert not any(key.startswith('VITE_') for key in config['env'][env]['vars'])
+for task in tasks:
+    text = (root / task['file']).read_text()
+    for section in ('deliverables', 'acceptance', 'checks'):
+        for item in task[section]:
+            assert item in text, f'Task spec drift: {task["id"]}'
+
 if errors:
     raise SystemExit('\n'.join(errors))
-print(f'PASS: Markdown links, {len(nodes)} connected board locations, {len(tasks)} ordered tasks')
+print(f'PASS: Markdown links, {len(nodes)} connected board locations, {len(tasks)} ordered tasks; Firebase config/provider consistency')

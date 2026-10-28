@@ -1,6 +1,6 @@
 # PandemicGame — Cloudflare build kit
 
-An original Pandemic-inspired cooperative browser game for **2–4 players per private room**. This repository currently contains the specification and coding-agent backlog, not a working game. The default implementation uses Cloudflare Workers, Static Assets, SQLite-backed Durable Objects, and Supabase Auth for Microsoft/Hotmail and Google login. No LLM runs during gameplay.
+An original Pandemic-inspired cooperative browser game for **2–4 players per private room**. This repository currently contains the specification and coding-agent backlog, not a working game. The default implementation uses Cloudflare Workers, Static Assets, SQLite-backed Durable Objects, and Firebase Authentication for Microsoft/Hotmail and Google login. No LLM runs during gameplay.
 
 ## Start coding
 
@@ -31,12 +31,12 @@ After T01 merges, replace T01 with the next task whose dependencies are complete
 | HTTPS API and room routing | Cloudflare Worker |
 | Multiplayer coordination | One Durable Object per room |
 | Game state/history | SQLite storage inside that Durable Object |
-| Microsoft/Google identities | Supabase Auth (external managed identity only) |
+| Microsoft/Google identities | Firebase Authentication (external managed identity only) |
 | CI | GitHub Actions, added by T01 and expanded by later tasks |
 
-No D1, R2, Redis, VPS, Kubernetes, or Supabase game database is required for the MVP. Supabase is the only non-Cloudflare runtime dependency. A completely Cloudflare-only identity implementation is a separate future decision, not an instruction to write custom OAuth in this MVP.
+No D1, R2, Redis, VPS, Kubernetes, Firestore or Firebase Realtime Database is required for the MVP. Firebase supplies managed identity only; all game assets, API and saved state remain on Cloudflare. Do not build custom OAuth or deploy game functions on Firebase.
 
-Budget: target $0/month within free quotas for a prototype; approximately $5/month base with Workers Paid, or $30/month base with Workers Paid plus Supabase Pro. Usage, taxes and domains are additional. Supabase Free may pause after one inactive week. See dated sources in [docs/SOURCES.md](docs/SOURCES.md).
+Budget: target **$0/month for occasional two-player use**, using Cloudflare Workers Free and Firebase Authentication Spark. Keep support for 2–4 players per room. No paid subscription or billing account is required for the selected Firebase social-login use. If measured Worker limits later require an upgrade, Workers Paid starts at approximately $5/month plus usage; do not upgrade automatically. Firebase Authentication does not document a seven-day inactivity pause for this service; this is not a perpetual availability guarantee. See dated sources in [docs/SOURCES.md](docs/SOURCES.md).
 
 ## Important defaults
 

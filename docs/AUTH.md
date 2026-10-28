@@ -1,33 +1,65 @@
-# Microsoft/Hotmail and Google authentication
+# Firebase Authentication — Microsoft/Hotmail and Google
 
-## Decision
+## Selected design
 
-Use Supabase Auth as an external identity provider. All game hosting/storage remains on Cloudflare. Do not implement passwords, a custom OAuth token server, or direct Microsoft/Google JWT acceptance by the game. Browser authenticates through Supabase; API accepts only this application's Supabase access JWTs.
+Use Firebase Authentication on the no-cost Spark plan, exclusively for identity. Keep website, API, realtime rooms and SQLite saves on Cloudflare. Start without a Firebase billing account. No Firestore, Realtime Database, Cloud Functions, Firebase game hosting, phone/SMS or enterprise SSO is required. Configure built-in Google and Microsoft social providers, not generic paid SAML/OIDC connections.
 
-## Owner setup checklist
+This replaces the previous identity design before coding starts: no user migration, dual-provider backend or compatibility shim is needed. The SDK's Firebase auth helper domain may be used for sign-in; this does not move game hosting off Cloudflare.
 
-1. Create a Supabase project (separate preview/production preferred). Record its URL and publishable key. Choose asymmetric JWT signing keys for JWKS verification.
-2. Set Site URL to the correct app origin and allow exact local/preview/production callback URLs as appropriate. Use `http://localhost` for local Microsoft flow, not 127.0.0.1. Configure `/auth/callback` in the SPA.
-3. Microsoft Entra: register an OAuth app supporting personal Microsoft accounts. For personal-only, configure Supabase Azure provider tenant URL `https://login.microsoftonline.com/consumers`. For personal plus organizational accounts, select a matching supported account type and common tenant. A single-organization-only app will not satisfy Hotmail login.
-4. Microsoft provider redirect URI is `https://<project-ref>.supabase.co/auth/v1/callback` (the identity provider callback, distinct from the SPA callback). Put client ID and secret VALUE in Supabase's Azure provider. Record secret expiry and rotate before it expires. Follow current Supabase guidance for verified-email claims.
-5. Google: create OAuth web client, configure consent screen/test users or production status as applicable, and register the same Supabase callback form. Store client ID/secret in Supabase. Use minimal identity scopes; no Gmail/contacts access.
-6. Frontend invokes provider `azure` with `email` scope or `google`, using PKCE and a fixed allowlisted SPA callback. Exchange code, restore intended local room path safely, and remove transient code/invite data. Reject external next/returnTo destinations.
-7. Test sign-in with an actual personal Hotmail/Outlook account and an actual Google account. Record pass/fail and environment without storing tokens or email addresses in the repository.
+## Owner setup
 
-## Backend contract
+1. Create separate Firebase projects for preview and production on Spark, register a Web app in each, and record the Web SDK config: apiKey, authDomain, projectId, appId. These identifiers are public configuration, not server credentials. Do not enable unrelated paid products.
+2. Enable Authentication and the Google provider; supply the required project support email. Configure consent/test users as applicable. Add the exact app hosts to Authentication Authorized domains. Add localhost explicitly for local real-provider testing; newer projects may not include it by default. Use stable preview and production Worker/custom-domain hosts, not wildcards.
+3. Register a Microsoft Entra Web OAuth application supporting organizational AND personal Microsoft accounts, so Outlook.com/Hotmail users can sign in. A single-organization registration is insufficient. Enable Firebase's Microsoft provider with its client ID and client secret VALUE. Use the exact callback shown by Firebase, normally `https://<project-id>.firebaseapp.com/__/auth/handler`. Store the secret only in the Firebase provider configuration and track/rotate its expiry.
+4. Use `new GoogleAuthProvider()` and `new OAuthProvider('microsoft.com')` in the Firebase Web SDK. Leave Microsoft tenant at the provider's tenant-independent common default for the chosen registration; do not restrict to one organization. Use minimal sign-in scopes, not mail/contact access.
+5. Test Google and a personal Microsoft/Hotmail account against preview and production independently. Record sanitized outcomes, not tokens or email addresses. Check provider consent/cancellation and expired Microsoft client-secret recovery instructions.
 
-Use a maintained JWT verifier compatible with Workers, reading a fixed project's JWKS. Validate cryptographic signature, allowed algorithm, issuer, audience, expiry and not-before. Cache keys, handle rotation, and bound failed refresh retries. Derive userId from `sub`; do not authorize by email, name, provider ID or client headers. Recheck membership every API request. Sanitize/length-limit display names and render as text.
+## Browser flow: popup by default
 
-Do not auto-link game identities just because email strings match. Let Supabase's supported verified identity-linking flow handle any future account linking; it is out of scope for MVP. A game may see two separate accounts as two users.
+Use `signInWithPopup` from a direct user click. Wait for Firebase auth initialization (`onAuthStateChanged` or equivalent supported SDK facility) before deciding whether to show the login UI. Use supported Firebase persistence; do not write a custom refresh-token store. Obtain `user.getIdToken()` and send it as the API Bearer credential. Handle refresh through SDK; on authentication expiry, force-refresh once if appropriate and retry the identical game command ID. Avoid an infinite refresh loop.
 
-## Sessions and realtime
+On Cloudflare hosting, popup login avoids the cross-origin storage issues documented for signInWithRedirect. Do not implement a homemade PKCE/code-exchange callback. The OAuth handler is Firebase's `/__/auth/handler`, not a Cloudflare `/auth/callback`. The app may have a `/login` page; after login, resume only a validated local room path.
 
-Refresh access tokens through Supabase client before retrying unauthorized requests. Do not replay game actions with new command IDs after token refresh. WebSocket tickets expire in 60 seconds and are bounded by JWT expiry; sockets lose room access when authentication expires, even if no game actions arrive. Refresh and reconnect. Logout clears client state and closes sockets; local JWT verification cannot instantly revoke an already issued access token. Keep access-token lifetime bounded and document it.
+Popup blocked/closed, account-exists-with-different-credential and provider failures need clear retry/recovery UI. Preserve invite fragments temporarily in sessionStorage and clear them after join/cancel; never send invites to the OAuth provider. For collision errors, ask users to sign in with the original provider; do not auto-link identities by matching email. Account-linking UI is out of scope.
 
-## Local tests
+Test desktop and tablet Safari/WebKit, not only Chromium. If popup behavior is insufficient, a redirect fallback is a deliberate follow-up design using Firebase's documented non-Firebase-hosting options (including an appropriately implemented auth-helper reverse proxy). Do not silently enable redirect fallback or route `/__/auth/*` to SPA HTML.
 
-Separate loopback-only local test entry point supplies deterministic signed test identities. Production/preview code uses a different verifier and must reject test keys, actor headers and bypass flags. Test expired, wrong issuer/audience/signature/algorithm and rotated keys. Never embed test keys in the production bundle. CI uses local mocks for repeatability; staging OAuth smoke tests remain mandatory and cannot be reported as automated-provider coverage.
+## Worker verification contract
 
-## External dependency
+Accept only Firebase ID tokens, not custom tokens, Google/Microsoft access tokens or raw client identity fields. Use a maintained Web Crypto-compatible JWT library verified to work in Cloudflare Workers. No Firebase Admin Node SDK or service-account private key is needed for this verification path.
 
-Supabase Free may pause after inactivity. An owner may reactivate it or choose Pro. Do not conceal that dependency in the Cloudflare runbook or add an unsafe auth fallback when it is unavailable.
+Google's documented signing certificate endpoint is:
+`https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com`
+
+It returns a map of kid to PEM X.509 certificate, NOT a JWKS document. Choose/import the certificate with a Workers-compatible library (for example a verified compatible importX509 implementation); do not pass the response blindly to a remote-JWKS helper. Pin this endpoint; ignore token-provided jku/x5u URLs. Cache certificates and imported keys using the endpoint's Cache-Control max-age; deduplicate fetches, bound timeouts and refresh once for unknown kid. Fail closed if no valid key is available; never persist an indefinite trust cache.
+
+Mandatory validation:
+
+| Claim/header | Required check |
+| --- | --- |
+| alg | Exactly RS256; reject unsigned/HS tokens |
+| kid | Matches a trusted current Secure Token certificate |
+| signature | Verified before any identity is trusted |
+| aud | Exactly configured FIREBASE_PROJECT_ID |
+| iss | Exactly `https://securetoken.google.com/<FIREBASE_PROJECT_ID>` |
+| sub | Nonempty opaque string, at most 128 characters; canonical userId, NOT a UUID |
+| exp | In future |
+| iat | In past; reject unreasonable future values |
+| auth_time | In past |
+| nbf | If present, not in future |
+
+Allow at most 60 seconds documented clock tolerance for clock claims. Do not accept missing mandatory claims, arbitrary Firebase projects or issuer/audience claims merely decoded without signature validation. Recheck room membership per request. Sanitize and bound display names; never authorize by email/name. A small independently tested verifier wrapper should expose a trusted userId, sanitized optional displayName and token expiry only.
+
+## Sessions, sockets and revocation
+
+Firebase ID tokens normally last about one hour; let SDK refresh them. Bind each WebSocket ticket to verified token expiry and close idle expired sockets via the room alarm. Reconnect with refreshed identity and a new ticket. Logout clears the client session and closes local sockets. Signature/claim verification does not check server-side token revocation or instant account disabling: an issued ID token may remain usable until expiry. This is the explicit MVP revocation boundary, not a claim of immediate logout revocation. If instant revocation becomes required, design/test that separately rather than adding service-account credentials casually.
+
+## Local and automated tests
+
+Use a separate loopback-only test entry point with deterministic signed test identities and mock certificate fetches. Firebase Auth Emulator is optional for SDK tests only; its unsigned tokens must never be accepted by preview/production. Never put FIREBASE_AUTH_EMULATOR_HOST, test keys, emulator adapters or local bypass imports into the deployed bundle. Test tokens use Firebase-shaped claims and opaque non-UUID UIDs. Test malformed/expired tokens, wrong project, missing/future iat/auth_time, unexpected algorithms, unknown kid, cache expiry, rotation, key-fetch failures and nonmember room access.
+
+Real-provider staging checks remain mandatory at T17. Local tests are not proof that OAuth settings or third-party browser behavior work. No production credentials are needed for T11 automated tests.
+
+## Cost and availability
+
+Spark is the selected free plan; two occasional players are well within normal social-login allowances. Firebase Authentication's published product/pricing documentation does not state a weekly inactivity pause; no uptime SLA or perpetual free guarantee is assumed. Check current quotas before release, especially if Identity Platform is enabled. Do not enable Blaze or phone authentication to solve an unrelated configuration error. Provider downtime never permits unverified access.

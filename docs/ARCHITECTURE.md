@@ -2,13 +2,13 @@
 
 ## Decision
 
-One Cloudflare Worker serves the static SPA and `/api/*`. Each opaque room ID routes to exactly one SQLite-backed `GameRoom` Durable Object via `idFromName`. The object owns membership, lobby, game state, accepted command receipts, events and temporary socket tickets. Supabase Auth supplies user identity only. No global room database in MVP; browser recent links are convenience, not authorization.
+One Cloudflare Worker serves the static SPA and `/api/*`. Each opaque room ID routes to exactly one SQLite-backed `GameRoom` Durable Object via `idFromName`. The object owns membership, lobby, game state, accepted command receipts, events and temporary socket tickets. Firebase Authentication supplies user identity only. No global room database in MVP; browser recent links are convenience, not authorization.
 
 ```mermaid
 flowchart TD
     B["2–4 browser clients"]
     A["Workers Static Assets"]
-    I["Supabase Auth: Microsoft / Google"]
+    I["Firebase Authentication: Microsoft / Google"]
     W["Worker: HTTPS API and authentication"]
     R["GameRoom Durable Object"]
     D["Per-room SQLite state and receipts"]
@@ -23,9 +23,9 @@ flowchart TD
 
 ## Boundary responsibilities
 
-Browser: render public state, obtain Supabase access tokens, submit commands with UUID IDs and versions, handle rejection/reconnect. It may preview legal actions but never decides authoritative outcomes. Use relative `/api` routes on the same origin. Do not optimistically consume cards or actions.
+Browser: render public state, obtain Firebase ID tokens, submit commands with UUID IDs and versions, handle rejection/reconnect. It may preview legal actions but never decides authoritative outcomes. Use relative `/api` routes on the same origin. Do not optimistically consume cards or actions.
 
-Worker: route only supported paths; enforce body limits and allowed origins, verify JWT signature/issuer/audience/expiry through a pinned-project JWKS, derive stable user UUID and sanitized display name, route to the named object. Never trust a caller-provided identity header; construct internal identity arguments after verification. Set no-store for authenticated API responses.
+Worker: route only supported paths; enforce body limits and allowed origins, verify JWT signature/issuer/audience/expiry using Google Secure Token public certificates and pinned Firebase project claims, derive stable opaque Firebase UID and sanitized display name, route to the named object. Never trust a caller-provided identity header; construct internal identity arguments after verification. Set no-store for authenticated API responses.
 
 GameRoom: authorize membership, validate schema, serialize mutations with storage transactions, call engine, persist before reply, broadcast public snapshots. Durable Objects provide a per-room coordinator but do not excuse races across async boundaries. No network awaits between state read and commit.
 
@@ -65,4 +65,8 @@ Cleanup alarm removes state, tickets and receipts and leaves a small expired tom
 
 One Worker plus its bindings per environment; separate preview and production object namespaces and auth projects preferred. Static assets are public; API responses contain private room data and are never edge-cached. `run_worker_first` targets `/api/*`, keeping normal asset requests out of Worker compute. SPA fallback must never turn API errors into index.html.
 
-Cloudflare room storage is the canonical save. Supabase outage blocks fresh login but does not justify accepting unverified tokens. Existing valid JWTs can be checked with cached signing keys until expiry; unknown key IDs fail closed after a bounded refresh attempt. In MVP, logout clears the client and closes its sockets; previously issued access tokens remain valid until expiry unless explicitly revoked server-side. Document this bounded JWT-session behavior.
+Cloudflare room storage is the canonical save. Firebase Authentication outage blocks fresh login but does not justify accepting unverified tokens. Existing valid Firebase ID tokens can be checked with cached signing keys until expiry; unknown key IDs fail closed after a bounded refresh attempt. In MVP, logout clears the client and closes its sockets; previously issued ID tokens remain valid until expiry unless explicitly revoked server-side. Document this bounded JWT-session behavior.
+
+## Firebase identity boundary
+
+The client uses Firebase Web SDK popup login and sends a Firebase ID token to the Worker. The Worker verifies RS256 signature and Google Secure Token certificates, with issuer `https://securetoken.google.com/<projectId>` and audience exactly FIREBASE_PROJECT_ID. `sub` is an opaque Firebase UID, not a UUID. See AUTH.md for mandatory claims, cache/rotation behavior, revocation limitations and popup handling. No Firebase Admin SDK, service account or Firebase database is needed in the deployed Worker. Authenticate before dispatching to a room; never turn provider downtime into an auth bypass.

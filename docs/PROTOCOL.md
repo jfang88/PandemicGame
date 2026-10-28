@@ -1,6 +1,6 @@
 # HTTP and realtime contract v1
 
-All non-health API endpoints require `Authorization: Bearer <Supabase access JWT>`, except the socket upgrade which requires a single-use room ticket. Enforce JSON Content-Type for JSON mutations and 16 KiB request-body limit. UTC timestamps are ISO strings; room/user/command IDs are opaque strings validated at the boundary. Reject unknown properties and unsupported enum values. No client-supplied userId is accepted as the acting identity.
+All non-health API endpoints require `Authorization: Bearer <Firebase ID token>`, except the socket upgrade which requires a single-use room ticket. Enforce JSON Content-Type for JSON mutations and 16 KiB request-body limit. UTC timestamps are ISO strings; room/user/command IDs are opaque strings validated at the boundary. Reject unknown properties and unsupported enum values. No client-supplied userId is accepted as the acting identity.
 
 ## Routes
 
@@ -16,7 +16,7 @@ All non-health API endpoints require `Authorization: Bearer <Supabase access JWT
 | GET /api/rooms/:id/ws?ticket=... | WebSocket upgrade | Origin-bound consume, current snapshot, then pushes |
 | GET /api/rooms/:id/events?afterRevision=N&afterIndex=M | Cursor | Membership-only public events, max 100 and next cursor |
 
-Invite URLs use `/join/:roomId#invite=<secret>`, keeping invite secrets out of request paths/server access logs. Client reads fragment, posts join after login, and clears the fragment after use; preserve it temporarily in sessionStorage across OAuth redirect, then clear it. Do not put invite secrets into provider redirect URLs. Room members cannot retrieve the current invite; owner rotates to obtain a new one. Duplicate rotate command must return the same invite via its private receipt, stored server-side as sensitive data and excluded from all public exports/logs. This is an explicit exception to receipts being public-result-only; protect it like a credential and erase it at expiry.
+Invite URLs use `/join/:roomId#invite=<secret>`, keeping invite secrets out of request paths/server access logs. Client reads fragment, posts join after login, and clears the fragment after use; preserve it temporarily in sessionStorage while the Firebase popup completes or login is retried, then clear it. Do not put invite secrets into provider OAuth URLs. Room members cannot retrieve the current invite; owner rotates to obtain a new one. Duplicate rotate command must return the same invite via its private receipt, stored server-side as sensitive data and excluded from all public exports/logs. This is an explicit exception to receipts being public-result-only; protect it like a credential and erase it at expiry.
 
 ## Commands
 
@@ -59,3 +59,7 @@ Generate commandId once per user intent. On timeout or 5xx retry the identical e
 ## Socket frames
 
 Server frame `{type:'snapshot',protocolVersion:1,revision,state}` or `{type:'session_expired'}`. Presence may be `{type:'presence',userIds:[...]}` and does not change game revision or ready status. Treat it as advisory. Client sends no gameplay frames; reject oversized or unsupported frames. Client reconnects with jittered 0.5–30 second backoff, refreshes auth if necessary, obtains a new ticket, and receives snapshot. Disable command UI while offline; do not queue a sequence of stale moves. Handle multiple tabs and missing broadcasts through snapshot/version checks.
+
+## Firebase authentication details
+
+Bearer credentials are Firebase ID tokens obtained from the Web SDK, not Firebase custom tokens, Google access tokens or Microsoft access tokens. The server pins Firebase project ID/issuer/audience per environment and uses verified `sub` as an opaque UID (1–128 characters; do not apply a UUID validator). `recipientUserId` uses that same UID format. SDK token refresh may precede an exact same-ID retry; it must not change command identity or expectedVersion. The WebSocket ticket authExpiresAt is the verified ID-token expiry. See AUTH.md for the full claim contract.

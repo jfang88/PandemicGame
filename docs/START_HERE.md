@@ -6,7 +6,7 @@ This build kit makes the default product, rules, architecture, protocol, task or
 
 ## Owner setup versus agent work
 
-An agent can complete T01–T10 and most auth/backend code locally without account secrets. The owner supplies Cloudflare account access through secure credentials, a Supabase project, and Microsoft/Google OAuth registrations before real-provider staging tests. See AUTH.md and CLOUDFLARE.md. Never paste secrets into an issue or prompt.
+An agent can complete T01–T10 and most auth/backend code locally without account secrets. The owner supplies Cloudflare account access through secure credentials, a Firebase Spark project, and Microsoft OAuth registration/Google provider configuration before real-provider staging tests. See AUTH.md and CLOUDFLARE.md. Never paste secrets into an issue or prompt.
 
 ## Execution sequence
 
@@ -36,3 +36,7 @@ Use npm workspaces and a single lockfile. Prefer explicit names and a small depe
 ## Change control
 
 The rules in RULES.md are selected defaults so work can begin immediately. Future balance changes get a new rulesVersion and fixtures; never silently alter an ongoing room. Storage schema migrations are separate from rules versions. Update affected task and test contracts together.
+
+## Selected low-cost identity design
+
+Firebase Authentication Spark is the sole login provider. All game hosting/storage stays on Cloudflare Free initially. Two infrequent players are the capacity baseline; 2–4-player support remains required. Task IDs and dependencies are stable, and all implementation tasks remain not started. There are no existing users/data to migrate. See AUTH.md before T11 and CLOUDFLARE.md before T17.

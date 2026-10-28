@@ -33,3 +33,7 @@ All tasks are **not started**. This build kit is not the application. Numeric or
 - T18: release evidence and owner handoff, not automatic production publishing.
 
 Machine-readable task dependencies and acceptance criteria: [spec/tasks.json](spec/tasks.json).
+
+## Architecture baseline
+
+Use Cloudflare Workers Free + SQLite Durable Objects for the game and Firebase Authentication Spark for Google/Microsoft login. T11 and T17 specify the identity implementation/setup; all task IDs and dependencies are unchanged. No implementation tasks have started. Firebase UID is not a UUID, and the backend verifies Firebase ID tokens using fixed Google certificates. See [AUTH.md](docs/AUTH.md).

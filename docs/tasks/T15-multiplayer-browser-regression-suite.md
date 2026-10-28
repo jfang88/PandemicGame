@@ -12,6 +12,7 @@ Status: not started. Dependencies: T14.
 - Add Playwright contexts for 2/3/4 identities and root test:e2e; CI browser setup and sanitized failure artifacts.
 - Test full games plus near-terminal wins/losses, hand limit, lobby race, offline refresh, duplicate update and expired session.
 - Keep fixtures/test identity endpoints only in local harness; map acceptance IDs to named tests.
+- Cover S09/S10/U05 Firebase claim/cache and popup/emulator cases with local test adapters; reserve actual OAuth/browser evidence for T17.
 
 ## Acceptance gate
 
