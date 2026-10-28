@@ -1,0 +1,604 @@
+{
+  "boardVersion": "grid48-v1",
+  "startLocation": "A01",
+  "width": 1000,
+  "height": 760,
+  "locations": [
+    {
+      "id": "A01",
+      "name": "Blue Station A01",
+      "color": "blue",
+      "x": 80,
+      "y": 80,
+      "neighbors": [
+        "A02",
+        "B01"
+      ]
+    },
+    {
+      "id": "A02",
+      "name": "Blue Station A02",
+      "color": "blue",
+      "x": 200,
+      "y": 80,
+      "neighbors": [
+        "A01",
+        "A03",
+        "B02"
+      ]
+    },
+    {
+      "id": "A03",
+      "name": "Blue Station A03",
+      "color": "blue",
+      "x": 320,
+      "y": 80,
+      "neighbors": [
+        "A02",
+        "A04",
+        "B03"
+      ]
+    },
+    {
+      "id": "A04",
+      "name": "Blue Station A04",
+      "color": "blue",
+      "x": 440,
+      "y": 80,
+      "neighbors": [
+        "A03",
+        "A05",
+        "B04"
+      ]
+    },
+    {
+      "id": "A05",
+      "name": "Yellow Station A05",
+      "color": "yellow",
+      "x": 560,
+      "y": 80,
+      "neighbors": [
+        "A04",
+        "A06",
+        "B05"
+      ]
+    },
+    {
+      "id": "A06",
+      "name": "Yellow Station A06",
+      "color": "yellow",
+      "x": 680,
+      "y": 80,
+      "neighbors": [
+        "A05",
+        "A07",
+        "B06"
+      ]
+    },
+    {
+      "id": "A07",
+      "name": "Yellow Station A07",
+      "color": "yellow",
+      "x": 800,
+      "y": 80,
+      "neighbors": [
+        "A06",
+        "A08",
+        "B07"
+      ]
+    },
+    {
+      "id": "A08",
+      "name": "Yellow Station A08",
+      "color": "yellow",
+      "x": 920,
+      "y": 80,
+      "neighbors": [
+        "A07",
+        "B08"
+      ]
+    },
+    {
+      "id": "B01",
+      "name": "Blue Station B01",
+      "color": "blue",
+      "x": 80,
+      "y": 200,
+      "neighbors": [
+        "A01",
+        "B02",
+        "C01"
+      ]
+    },
+    {
+      "id": "B02",
+      "name": "Blue Station B02",
+      "color": "blue",
+      "x": 200,
+      "y": 200,
+      "neighbors": [
+        "A02",
+        "B01",
+        "B03",
+        "C02"
+      ]
+    },
+    {
+      "id": "B03",
+      "name": "Blue Station B03",
+      "color": "blue",
+      "x": 320,
+      "y": 200,
+      "neighbors": [
+        "A03",
+        "B02",
+        "B04",
+        "C03"
+      ]
+    },
+    {
+      "id": "B04",
+      "name": "Blue Station B04",
+      "color": "blue",
+      "x": 440,
+      "y": 200,
+      "neighbors": [
+        "A04",
+        "B03",
+        "B05",
+        "C04"
+      ]
+    },
+    {
+      "id": "B05",
+      "name": "Yellow Station B05",
+      "color": "yellow",
+      "x": 560,
+      "y": 200,
+      "neighbors": [
+        "A05",
+        "B04",
+        "B06",
+        "C05"
+      ]
+    },
+    {
+      "id": "B06",
+      "name": "Yellow Station B06",
+      "color": "yellow",
+      "x": 680,
+      "y": 200,
+      "neighbors": [
+        "A06",
+        "B05",
+        "B07",
+        "C06"
+      ]
+    },
+    {
+      "id": "B07",
+      "name": "Yellow Station B07",
+      "color": "yellow",
+      "x": 800,
+      "y": 200,
+      "neighbors": [
+        "A07",
+        "B06",
+        "B08",
+        "C07"
+      ]
+    },
+    {
+      "id": "B08",
+      "name": "Yellow Station B08",
+      "color": "yellow",
+      "x": 920,
+      "y": 200,
+      "neighbors": [
+        "A08",
+        "B07",
+        "C08"
+      ]
+    },
+    {
+      "id": "C01",
+      "name": "Blue Station C01",
+      "color": "blue",
+      "x": 80,
+      "y": 320,
+      "neighbors": [
+        "B01",
+        "C02",
+        "D01"
+      ]
+    },
+    {
+      "id": "C02",
+      "name": "Blue Station C02",
+      "color": "blue",
+      "x": 200,
+      "y": 320,
+      "neighbors": [
+        "B02",
+        "C01",
+        "C03",
+        "D02"
+      ]
+    },
+    {
+      "id": "C03",
+      "name": "Blue Station C03",
+      "color": "blue",
+      "x": 320,
+      "y": 320,
+      "neighbors": [
+        "B03",
+        "C02",
+        "C04",
+        "D03"
+      ]
+    },
+    {
+      "id": "C04",
+      "name": "Blue Station C04",
+      "color": "blue",
+      "x": 440,
+      "y": 320,
+      "neighbors": [
+        "B04",
+        "C03",
+        "C05",
+        "D04"
+      ]
+    },
+    {
+      "id": "C05",
+      "name": "Yellow Station C05",
+      "color": "yellow",
+      "x": 560,
+      "y": 320,
+      "neighbors": [
+        "B05",
+        "C04",
+        "C06",
+        "D05"
+      ]
+    },
+    {
+      "id": "C06",
+      "name": "Yellow Station C06",
+      "color": "yellow",
+      "x": 680,
+      "y": 320,
+      "neighbors": [
+        "B06",
+        "C05",
+        "C07",
+        "D06"
+      ]
+    },
+    {
+      "id": "C07",
+      "name": "Yellow Station C07",
+      "color": "yellow",
+      "x": 800,
+      "y": 320,
+      "neighbors": [
+        "B07",
+        "C06",
+        "C08",
+        "D07"
+      ]
+    },
+    {
+      "id": "C08",
+      "name": "Yellow Station C08",
+      "color": "yellow",
+      "x": 920,
+      "y": 320,
+      "neighbors": [
+        "B08",
+        "C07",
+        "D08"
+      ]
+    },
+    {
+      "id": "D01",
+      "name": "Red Station D01",
+      "color": "red",
+      "x": 80,
+      "y": 440,
+      "neighbors": [
+        "C01",
+        "D02",
+        "E01"
+      ]
+    },
+    {
+      "id": "D02",
+      "name": "Red Station D02",
+      "color": "red",
+      "x": 200,
+      "y": 440,
+      "neighbors": [
+        "C02",
+        "D01",
+        "D03",
+        "E02"
+      ]
+    },
+    {
+      "id": "D03",
+      "name": "Red Station D03",
+      "color": "red",
+      "x": 320,
+      "y": 440,
+      "neighbors": [
+        "C03",
+        "D02",
+        "D04",
+        "E03"
+      ]
+    },
+    {
+      "id": "D04",
+      "name": "Red Station D04",
+      "color": "red",
+      "x": 440,
+      "y": 440,
+      "neighbors": [
+        "C04",
+        "D03",
+        "D05",
+        "E04"
+      ]
+    },
+    {
+      "id": "D05",
+      "name": "Black Station D05",
+      "color": "black",
+      "x": 560,
+      "y": 440,
+      "neighbors": [
+        "C05",
+        "D04",
+        "D06",
+        "E05"
+      ]
+    },
+    {
+      "id": "D06",
+      "name": "Black Station D06",
+      "color": "black",
+      "x": 680,
+      "y": 440,
+      "neighbors": [
+        "C06",
+        "D05",
+        "D07",
+        "E06"
+      ]
+    },
+    {
+      "id": "D07",
+      "name": "Black Station D07",
+      "color": "black",
+      "x": 800,
+      "y": 440,
+      "neighbors": [
+        "C07",
+        "D06",
+        "D08",
+        "E07"
+      ]
+    },
+    {
+      "id": "D08",
+      "name": "Black Station D08",
+      "color": "black",
+      "x": 920,
+      "y": 440,
+      "neighbors": [
+        "C08",
+        "D07",
+        "E08"
+      ]
+    },
+    {
+      "id": "E01",
+      "name": "Red Station E01",
+      "color": "red",
+      "x": 80,
+      "y": 560,
+      "neighbors": [
+        "D01",
+        "E02",
+        "F01"
+      ]
+    },
+    {
+      "id": "E02",
+      "name": "Red Station E02",
+      "color": "red",
+      "x": 200,
+      "y": 560,
+      "neighbors": [
+        "D02",
+        "E01",
+        "E03",
+        "F02"
+      ]
+    },
+    {
+      "id": "E03",
+      "name": "Red Station E03",
+      "color": "red",
+      "x": 320,
+      "y": 560,
+      "neighbors": [
+        "D03",
+        "E02",
+        "E04",
+        "F03"
+      ]
+    },
+    {
+      "id": "E04",
+      "name": "Red Station E04",
+      "color": "red",
+      "x": 440,
+      "y": 560,
+      "neighbors": [
+        "D04",
+        "E03",
+        "E05",
+        "F04"
+      ]
+    },
+    {
+      "id": "E05",
+      "name": "Black Station E05",
+      "color": "black",
+      "x": 560,
+      "y": 560,
+      "neighbors": [
+        "D05",
+        "E04",
+        "E06",
+        "F05"
+      ]
+    },
+    {
+      "id": "E06",
+      "name": "Black Station E06",
+      "color": "black",
+      "x": 680,
+      "y": 560,
+      "neighbors": [
+        "D06",
+        "E05",
+        "E07",
+        "F06"
+      ]
+    },
+    {
+      "id": "E07",
+      "name": "Black Station E07",
+      "color": "black",
+      "x": 800,
+      "y": 560,
+      "neighbors": [
+        "D07",
+        "E06",
+        "E08",
+        "F07"
+      ]
+    },
+    {
+      "id": "E08",
+      "name": "Black Station E08",
+      "color": "black",
+      "x": 920,
+      "y": 560,
+      "neighbors": [
+        "D08",
+        "E07",
+        "F08"
+      ]
+    },
+    {
+      "id": "F01",
+      "name": "Red Station F01",
+      "color": "red",
+      "x": 80,
+      "y": 680,
+      "neighbors": [
+        "E01",
+        "F02"
+      ]
+    },
+    {
+      "id": "F02",
+      "name": "Red Station F02",
+      "color": "red",
+      "x": 200,
+      "y": 680,
+      "neighbors": [
+        "E02",
+        "F01",
+        "F03"
+      ]
+    },
+    {
+      "id": "F03",
+      "name": "Red Station F03",
+      "color": "red",
+      "x": 320,
+      "y": 680,
+      "neighbors": [
+        "E03",
+        "F02",
+        "F04"
+      ]
+    },
+    {
+      "id": "F04",
+      "name": "Red Station F04",
+      "color": "red",
+      "x": 440,
+      "y": 680,
+      "neighbors": [
+        "E04",
+        "F03",
+        "F05"
+      ]
+    },
+    {
+      "id": "F05",
+      "name": "Black Station F05",
+      "color": "black",
+      "x": 560,
+      "y": 680,
+      "neighbors": [
+        "E05",
+        "F04",
+        "F06"
+      ]
+    },
+    {
+      "id": "F06",
+      "name": "Black Station F06",
+      "color": "black",
+      "x": 680,
+      "y": 680,
+      "neighbors": [
+        "E06",
+        "F05",
+        "F07"
+      ]
+    },
+    {
+      "id": "F07",
+      "name": "Black Station F07",
+      "color": "black",
+      "x": 800,
+      "y": 680,
+      "neighbors": [
+        "E07",
+        "F06",
+        "F08"
+      ]
+    },
+    {
+      "id": "F08",
+      "name": "Black Station F08",
+      "color": "black",
+      "x": 920,
+      "y": 680,
+      "neighbors": [
+        "E08",
+        "F07"
+      ]
+    }
+  ]
+}

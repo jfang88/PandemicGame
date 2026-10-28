@@ -1,0 +1,455 @@
+[
+  {
+    "id": "T01",
+    "title": "Workspace and CI foundation",
+    "dependsOn": [],
+    "read": [
+      "docs/START_HERE.md",
+      "docs/CLOUDFLARE.md"
+    ],
+    "deliverables": [
+      "Create npm workspaces for web, worker, engine and protocol; strict TypeScript, compatible pinned dependencies, one lockfile, Node version pin and lint configuration.",
+      "Create minimal real React screen, Worker health route and pure package smoke tests; no game or public deployment yet.",
+      "Add root lint/typecheck/test:unit/build/check:docs scripts, local dev instructions, secret-safe ignore/example files, and PR GitHub Actions with read-only permissions. Document later test scripts as unavailable until their tasks."
+    ],
+    "acceptance": [
+      "Fresh clone + npm ci + lint + typecheck + test:unit + build + check:docs pass.",
+      "Local browser loads scaffold and health endpoint; no success-only script stubs or credentials."
+    ],
+    "checks": [
+      "Run all newly introduced scripts and record Node/package versions; validate build-kit Python script."
+    ],
+    "file": "docs/tasks/T01-workspace-and-ci-foundation.md"
+  },
+  {
+    "id": "T02",
+    "title": "State types and deterministic setup",
+    "dependsOn": [
+      "T01"
+    ],
+    "read": [
+      "docs/RULES.md",
+      "docs/DATA_MODEL.md",
+      "spec/board.v1.json",
+      "docs/ACCEPTANCE.md"
+    ],
+    "deliverables": [
+      "Implement versioned engine state/types, canonical board loader, card IDs and validated setup for 2\u20134 unique players/roles.",
+      "Implement specified deterministic RNG and shuffle with independently reviewed frozen vectors; inject seed, never ambient randomness.",
+      "Implement setup sequence, card distribution, deck partitioning and invariant helpers."
+    ],
+    "acceptance": [
+      "E01/E02 pass for all player counts; graph/config invalidity rejected; setup never mutates caller input.",
+      "Cube/card counts and exact initial phase/action count correct; zero seed rejected or explicitly normalized identically in all paths."
+    ],
+    "checks": [
+      "Unit tests with fixed vectors, setup seeds and invalid roster/config cases; typecheck."
+    ],
+    "file": "docs/tasks/T02-state-types-and-deterministic-setup.md"
+  },
+  {
+    "id": "T03",
+    "title": "Movement treatment and construction",
+    "dependsOn": [
+      "T02"
+    ],
+    "read": [
+      "docs/RULES.md",
+      "docs/ACCEPTANCE.md"
+    ],
+    "deliverables": [
+      "Implement MOVE, DIRECT_FLIGHT, CHARTER_FLIGHT, SHUTTLE, TREAT, BUILD_CENTER and PASS in pure engine.",
+      "Centralize actor/phase/action validation and deterministic public events; implement Medic/Builder exact effects.",
+      "Return unchanged state on invalid command; no mutation of passed input. Automatic end-turn resolver is connected in T05."
+    ],
+    "acceptance": [
+      "E03\u2013E08 and relevant E23 cases pass; all card/action/supply costs exact.",
+      "No fourth cube, seventh center, passive Medic effect or accidental self-flight allowed."
+    ],
+    "checks": [
+      "Positive/negative unit tests for each command, immutable-input checks, typecheck."
+    ],
+    "file": "docs/tasks/T03-movement-treatment-and-construction.md"
+  },
+  {
+    "id": "T04",
+    "title": "Sharing cures and discard continuations",
+    "dependsOn": [
+      "T03"
+    ],
+    "read": [
+      "docs/RULES.md",
+      "docs/DATA_MODEL.md",
+      "docs/ACCEPTANCE.md"
+    ],
+    "deliverables": [
+      "Implement GIVE_CARD, DISCOVER_CURE, DISCARD; Scientist/Courier abilities; visible-hand policy.",
+      "Represent DISCARD_REQUIRED and resume continuation explicitly, including recipient discarding after another player\u2019s fourth action.",
+      "Implement immediate fourth-cure victory and terminal command rejection."
+    ],
+    "acceptance": [
+      "E09/E10/E12/E21/E23 pass; duplicate card IDs, wrong recipient, wrong discarder and wrong phase rejected without cost.",
+      "Discard leaves exactly seven and consumes no action; fourth cure ends before automatic turn resolution."
+    ],
+    "checks": [
+      "Unit tests around 7/8-card boundaries and all cure/transfer restrictions; typecheck."
+    ],
+    "file": "docs/tasks/T04-sharing-cures-and-discard-continuations.md"
+  },
+  {
+    "id": "T05",
+    "title": "Draw infection epidemics and losses",
+    "dependsOn": [
+      "T04"
+    ],
+    "read": [
+      "docs/RULES.md",
+      "docs/ACCEPTANCE.md"
+    ],
+    "deliverables": [
+      "Implement automatic DRAW/INFECTION progression and turn rotation; pause/resume on each drawn-card hand limit.",
+      "Implement deterministic outbreak chains, supply checks, infection deck refill, epidemic bottom draws/intensify and two-epidemic turns.",
+      "Implement loss reasons and deterministic first-terminal precedence; automatic effects resolve within one engine transition."
+    ],
+    "acceptance": [
+      "E11/E13\u2013E22 pass, including cycle and epidemic visited-set scope.",
+      "No persisted mid-infection state; only explicit hand-limit continuation interrupts automatic resolution."
+    ],
+    "checks": [
+      "Unit scenarios for each loss, loop propagation order, bottom/top deck semantics and pending draw counts."
+    ],
+    "file": "docs/tasks/T05-draw-infection-epidemics-and-losses.md"
+  },
+  {
+    "id": "T06",
+    "title": "Engine invariants and independent rules review",
+    "dependsOn": [
+      "T05"
+    ],
+    "read": [
+      "docs/RULES.md",
+      "docs/TESTING.md",
+      "docs/ACCEPTANCE.md",
+      "prompts/REVIEW_TASK.md"
+    ],
+    "deliverables": [
+      "Add legal-action enumeration and randomized legal-sequence harness with saved failing seed/trace.",
+      "Run independent review against rules, add missing regression cases, document provisional balance and unsupported features.",
+      "Produce engine gate report in docs/evidence/T06.md without claiming gameplay balance from random tests."
+    ],
+    "acceptance": [
+      "All E01\u2013E24 pass; at least 100 seeds per 2/3/4 mode, bounded 1000-action exploration with explicit timeout reporting.",
+      "Replay yields identical results; invalid actions preserve state and RNG; no unresolved blocking rules defects."
+    ],
+    "checks": [
+      "Full engine unit suite, randomized harness, lint/typecheck; independent review evidence."
+    ],
+    "file": "docs/tasks/T06-engine-invariants-and-independent-rules-review.md"
+  },
+  {
+    "id": "T07",
+    "title": "Room persistence and protocol schemas",
+    "dependsOn": [
+      "T06"
+    ],
+    "read": [
+      "docs/ARCHITECTURE.md",
+      "docs/DATA_MODEL.md",
+      "docs/PROTOCOL.md",
+      "docs/CLOUDFLARE.md"
+    ],
+    "deliverables": [
+      "Implement shared strict runtime schemas, public projection and API error envelope.",
+      "Implement GameRoom SQLite schema/migration, logical create/read and current snapshot persistence; separate local test entry point.",
+      "Add real Cloudflare runtime integration suite and root test:integration script. Local-only until real auth is complete."
+    ],
+    "acceptance": [
+      "State survives re-instantiation with identical decks/RNG; public projection excludes all secret fields.",
+      "Unknown schema/protocol versions fail clearly; SQL parameters and API body validation work; O01 routes testable locally."
+    ],
+    "checks": [
+      "Workerd/SQLite integration tests and projection leakage tests; unit/typecheck/build."
+    ],
+    "file": "docs/tasks/T07-room-persistence-and-protocol-schemas.md"
+  },
+  {
+    "id": "T08",
+    "title": "Atomic command execution and retry safety",
+    "dependsOn": [
+      "T07"
+    ],
+    "read": [
+      "docs/ARCHITECTURE.md",
+      "docs/PROTOCOL.md",
+      "docs/ACCEPTANCE.md"
+    ],
+    "deliverables": [
+      "Implement command processing transaction: membership, receipt/hash, revision, engine transition, state/events/receipt writes.",
+      "Return stored acceptance for exact retries; stale/reused-ID errors; commit before acknowledgment and broadcast hooks.",
+      "Introduce local-only fault injection at transaction and post-commit boundaries, never a deployed API."
+    ],
+    "acceptance": [
+      "P01\u2013P06 pass for transaction/restart portions, including raced same-version actions and failure between writes.",
+      "Duplicate after restart changes state once; error candidate never leaks into authoritative cache."
+    ],
+    "checks": [
+      "Runtime race/fault/restart integration tests; full engine and protocol suites; review atomic boundary."
+    ],
+    "file": "docs/tasks/T08-atomic-command-execution-and-retry-safety.md"
+  },
+  {
+    "id": "T09",
+    "title": "Private lobby invites and membership",
+    "dependsOn": [
+      "T08"
+    ],
+    "read": [
+      "docs/PRODUCT.md",
+      "docs/PROTOCOL.md",
+      "docs/ARCHITECTURE.md",
+      "docs/ACCEPTANCE.md"
+    ],
+    "deliverables": [
+      "Implement idempotent room creation, cryptographic invites/rotation, authenticated-identity admission abstraction, stable seats and unique roles.",
+      "Implement readiness, owner-only start, owner transfer on lobby leave, roster freeze and membership authorization.",
+      "Handle private invite receipts, leaving-player retry exception and logical missing rooms without leaking data."
+    ],
+    "acceptance": [
+      "P07/P08/S02/S08 pass against local test identities; max-four and role races atomic.",
+      "Start requires 2\u20134 ready unique roles; started game rejects joining/leaving; disconnect is not leave."
+    ],
+    "checks": [
+      "Room integration tests, schema tests, negative admission/access tests."
+    ],
+    "file": "docs/tasks/T09-private-lobby-invites-and-membership.md"
+  },
+  {
+    "id": "T10",
+    "title": "Hibernating realtime and reconnect",
+    "dependsOn": [
+      "T09"
+    ],
+    "read": [
+      "docs/ARCHITECTURE.md",
+      "docs/PROTOCOL.md",
+      "docs/TESTING.md"
+    ],
+    "deliverables": [
+      "Implement one-use persisted room socket tickets, origin checks, hibernation sockets and durable connection attachments.",
+      "Broadcast member-only snapshots after commits; enforce socket caps, auth expiry and cleanup scheduling.",
+      "Implement client transport module with stable command IDs, current snapshot reconciliation and bounded retry/reconnect."
+    ],
+    "acceptance": [
+      "P05/P06/S03/S04 and transport portions U02 pass locally; no always-running JS timers on server.",
+      "Commands remain HTTPS-only; lost updates recovered by snapshot; expired idle sockets lose access."
+    ],
+    "checks": [
+      "Cloudflare socket integration tests, client transport unit tests, hibernation staging checks explicitly pending T17."
+    ],
+    "file": "docs/tasks/T10-hibernating-realtime-and-reconnect.md"
+  },
+  {
+    "id": "T11",
+    "title": "Microsoft Google auth and authorization",
+    "dependsOn": [
+      "T10"
+    ],
+    "read": [
+      "docs/AUTH.md",
+      "docs/PROTOCOL.md",
+      "docs/CLOUDFLARE.md",
+      "docs/ACCEPTANCE.md"
+    ],
+    "deliverables": [
+      "Implement Supabase PKCE login/callback/logout, safe room return path and short-lived invite fragment handling.",
+      "Implement Worker JWT verifier with fixed JWKS issuer/audience/algorithm/expiry and rotation handling; derive actor from sub.",
+      "Ensure preview/production has no test identity entry point or signing keys; add setup templates and provider-check evidence sheet."
+    ],
+    "acceptance": [
+      "S01/S02/S05/S06 pass; no email-based authorization or open redirect; token refresh retries preserve command ID.",
+      "T11 completes on automated auth/code gates; track U03 real-provider verification explicitly under T17. Missing account credentials block T17 external checks and production release, not the local T11 implementation."
+    ],
+    "checks": [
+      "JWT negative/rotation tests, production-artifact bypass test, callback unit/browser smoke; real OAuth staging evidence at T17."
+    ],
+    "file": "docs/tasks/T11-microsoft-google-auth-and-authorization.md"
+  },
+  {
+    "id": "T12",
+    "title": "Local playable board interface",
+    "dependsOn": [
+      "T06"
+    ],
+    "read": [
+      "docs/PRODUCT.md",
+      "docs/RULES.md",
+      "spec/board.v1.json",
+      "docs/ACCEPTANCE.md"
+    ],
+    "deliverables": [
+      "Implement responsive SVG board, role/pawn/card panels, threats/centers/supplies, phase/action indicators and legal action controls.",
+      "Use engine through a local transport adapter for hot-seat development; same view components later use network adapter.",
+      "Implement discard interruption and terminal result; original visual assets and keyboard/non-color labels."
+    ],
+    "acceptance": [
+      "A complete local game can reach terminal result through UI; E12/E13 hand-limit interactions visible and correct.",
+      "U04 checks pass; no hidden deck/seed exposed through production UI module imports."
+    ],
+    "checks": [
+      "Component interaction tests, production build inspection and manual keyboard/tablet walkthrough."
+    ],
+    "file": "docs/tasks/T12-local-playable-board-interface.md"
+  },
+  {
+    "id": "T13",
+    "title": "Connected lobby and multiplayer UI",
+    "dependsOn": [
+      "T11",
+      "T12"
+    ],
+    "read": [
+      "docs/PRODUCT.md",
+      "docs/PROTOCOL.md",
+      "docs/AUTH.md"
+    ],
+    "deliverables": [
+      "Connect login/home/invite/lobby/role/readiness/start screens to authenticated API.",
+      "Swap local adapter for network transport in deployed app; render server snapshots and pending/rejected actions.",
+      "Add private recent-room links, safe error states, connection/session banners and bounded public history."
+    ],
+    "acceptance": [
+      "2/3/4 separate identities join and play synchronized turns; nonactive players cannot act.",
+      "Stale-version rejection refreshes state without silently reissuing move; refresh returns to existing seat."
+    ],
+    "checks": [
+      "UI integration tests plus initial independent-browser smoke; lint/typecheck/build."
+    ],
+    "file": "docs/tasks/T13-connected-lobby-and-multiplayer-ui.md"
+  },
+  {
+    "id": "T14",
+    "title": "Durable resume retention and compatibility",
+    "dependsOn": [
+      "T13"
+    ],
+    "read": [
+      "docs/DATA_MODEL.md",
+      "docs/OPERATIONS.md",
+      "docs/ARCHITECTURE.md"
+    ],
+    "deliverables": [
+      "Finish unified alarm scheduler for auth expiry/ticket cleanup/room retention, with tombstones and final deletion.",
+      "Add schema-version fixtures and migration handling; freeze incompatible rules and document compatible rollback.",
+      "Ensure resumed discard phase, decks and active seat survive all supported restarts; recent-room expired UX."
+    ],
+    "acceptance": [
+      "P06/S04/O03 retention portions pass with fake time and real storage; reads do not extend expiry.",
+      "Expired rooms cannot revive via join/create retry; unknown versions never silently reset state."
+    ],
+    "checks": [
+      "Runtime alarm/migration/restart tests; client expired-room tests."
+    ],
+    "file": "docs/tasks/T14-durable-resume-retention-and-compatibility.md"
+  },
+  {
+    "id": "T15",
+    "title": "Multiplayer browser regression suite",
+    "dependsOn": [
+      "T14"
+    ],
+    "read": [
+      "docs/TESTING.md",
+      "docs/ACCEPTANCE.md"
+    ],
+    "deliverables": [
+      "Add Playwright contexts for 2/3/4 identities and root test:e2e; CI browser setup and sanitized failure artifacts.",
+      "Test full games plus near-terminal wins/losses, hand limit, lobby race, offline refresh, duplicate update and expired session.",
+      "Keep fixtures/test identity endpoints only in local harness; map acceptance IDs to named tests."
+    ],
+    "acceptance": [
+      "U01/U02/U04 repeatably pass; at least one full setup-to-terminal run per player count.",
+      "No shared-context fake multiplayer, skipped required assertions or test-only deployed routes."
+    ],
+    "checks": [
+      "Full e2e suite repeated to diagnose flakes, integration/unit suites, production artifact check."
+    ],
+    "file": "docs/tasks/T15-multiplayer-browser-regression-suite.md"
+  },
+  {
+    "id": "T16",
+    "title": "Abuse controls observability and load",
+    "dependsOn": [
+      "T15"
+    ],
+    "read": [
+      "docs/OPERATIONS.md",
+      "docs/TESTING.md",
+      "docs/ACCEPTANCE.md"
+    ],
+    "deliverables": [
+      "Implement bounded request/socket/history sizes, durable room rate limiting and supported edge create/join abuse controls.",
+      "Add sanitized structured logs/metrics and bounded 10-room load harness; document actual rate-limit semantics.",
+      "Audit security boundaries and asset bundles with independent review; resolve blockers."
+    ],
+    "acceptance": [
+      "S05\u2013S07 pass; no secret payloads in logs/traces; limits return useful 429 with Retry-After.",
+      "O02 harness runs locally and is ready for owned preview; performance claims remain pending measured staging results."
+    ],
+    "checks": [
+      "Limit/security integration tests, bundle scan, local bounded load, independent review report."
+    ],
+    "file": "docs/tasks/T16-abuse-controls-observability-and-load.md"
+  },
+  {
+    "id": "T17",
+    "title": "Cloudflare preview deployment pipeline",
+    "dependsOn": [
+      "T16"
+    ],
+    "read": [
+      "docs/CLOUDFLARE.md",
+      "docs/AUTH.md",
+      "docs/OPERATIONS.md",
+      "docs/SOURCES.md"
+    ],
+    "deliverables": [
+      "Validate/promote Wrangler template, environment bindings/migrations and build-time auth vars against pinned current tools.",
+      "Add trusted-main manual preview/production deployment workflow with scoped secrets and environment concurrency; no PR auto-deploy.",
+      "With owner-provided credentials, deploy preview and run OAuth, hibernation, namespace isolation, routing and load checks; document observed URLs and versions."
+    ],
+    "acceptance": [
+      "O01/O02/O03/O05 and U03 pass in actual preview; no claimed pass when account setup missing.",
+      "Published preview uses real auth, independent resources, no test bypass, and durable state. Production remains untriggered."
+    ],
+    "checks": [
+      "Full CI, Wrangler validation, actual preview smoke/load, personal Microsoft + Google login and idle observation."
+    ],
+    "file": "docs/tasks/T17-cloudflare-preview-deployment-pipeline.md"
+  },
+  {
+    "id": "T18",
+    "title": "Release readiness and owner handoff",
+    "dependsOn": [
+      "T17"
+    ],
+    "read": [
+      "docs/TESTING.md",
+      "docs/OPERATIONS.md",
+      "docs/CLOUDFLARE.md",
+      "prompts/REVIEW_TASK.md"
+    ],
+    "deliverables": [
+      "Complete acceptance traceability report, independent final review and four-session manual playtest.",
+      "Rehearse compatible update/recovery in preview; verify operational limits, usage alerts and documented backup limitations.",
+      "Prepare owner release instructions, known issues and tested commit; trigger production only if owner explicitly authorizes that deployment."
+    ],
+    "acceptance": [
+      "All required E/P/S/U/O criteria have passing evidence; no critical/high defects unresolved; O04 recovery rehearsal recorded.",
+      "Fresh-contributor setup works; owner can deploy the tested commit and verify it. Do not claim production deployment without actual result."
+    ],
+    "checks": [
+      "Full checks plus manual staging matrix and review; post-deploy smoke only if production is authorized."
+    ],
+    "file": "docs/tasks/T18-release-readiness-and-owner-handoff.md"
+  }
+]
