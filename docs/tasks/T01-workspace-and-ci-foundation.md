@@ -1,6 +1,6 @@
 # T01 — Workspace and CI foundation
 
-Status: not started. Dependencies: none.
+Status: in review (blocked). Dependencies: none.\n\nImplementation branch: `agent/T01-workspace-and-ci-foundation`. Draft scaffold committed: React/Vite entry, local Worker health route, workspace manifests, engine/protocol exports and unit-test source, and read-only PR CI. **Not accepted:** missing dependency lockfile, no successful `npm ci` or runtime check, no browser evidence, action SHAs not yet pinned. Do not merge, mark done, or start T02.
 
 ## Read
 
@@ -122,7 +122,7 @@ or any later task.
 
 ## Low-cost coding-agent launch
 
-These commands are for a future implementation run, not evidence that T01 has been implemented. Use an installed, authenticated Codex CLI and a supported Node environment. GPT-6 Luna is the low-cost focused-coding example verified on 2026-10-28; confirm availability for the account at execution time. See [official model guidance](https://learn.chatgpt.com/docs/models).
+These commands are for completing and verifying this draft implementation, not evidence that T01 has passed. Use an installed, authenticated Codex CLI and a supported Node environment. GPT-6 Luna is the low-cost focused-coding example verified on 2026-10-28; confirm availability for the account at execution time. See [official model guidance](https://learn.chatgpt.com/docs/models).
 
 ```bash
 gh auth status

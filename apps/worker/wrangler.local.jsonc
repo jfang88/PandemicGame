@@ -1,0 +1,7 @@
+{
+  // Development-only Worker; no Durable Object bindings until T07.
+  "name": "pandemic-game-local",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "vars": { "FIREBASE_PROJECT_ID": "local-placeholder-not-authenticated" }
+}
