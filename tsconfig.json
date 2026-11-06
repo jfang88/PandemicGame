@@ -1,0 +1,17 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/engine"
+    },
+    {
+      "path": "./packages/protocol"
+    },
+    {
+      "path": "./apps/web"
+    },
+    {
+      "path": "./apps/worker"
+    }
+  ]
+}
