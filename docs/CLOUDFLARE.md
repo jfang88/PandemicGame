@@ -2,6 +2,10 @@
 
 This is a target runbook. T01 creates executable scripts; T17 validates configuration against its pinned Wrangler version. No account resources have been provisioned by this planning commit.
 
+## Step-by-step owner and automation setup
+
+Start with [AGENT_ACCESS.md](AGENT_ACCESS.md) for Cloudflare account signup, account ID, Workers Free/SQLite Durable Objects eligibility, per-Worker token roles, GitHub environment secret names, and the preview-vs-production approval boundary. Coding agents should **not** receive the deployment API token directly. An owner may bootstrap the preview Worker to avoid granting autonomous agents Worker-creation permissions; use the restricted GitHub workflow for subsequent preview deployment after T17.
+
 ## Accounts and local prerequisites
 
 Owner: Cloudflare account with Workers and SQLite Durable Objects available; Firebase Spark project; Microsoft OAuth app and enabled Google provider (AUTH.md). A custom domain is optional: use the Worker-provided HTTPS URL first. Paid-plan upgrade is optional and an owner billing decision.
