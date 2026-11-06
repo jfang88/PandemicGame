@@ -1,0 +1,14 @@
+{
+  "name": "@pandemic/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --config wrangler.local.jsonc --local --port 8787",
+    "build": "wrangler deploy --config wrangler.local.jsonc --dry-run --outdir dist"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20261001.0",
+    "wrangler": "4.45.0"
+  }
+}
