@@ -13,7 +13,7 @@
   "scripts": {
     "dev": "concurrently -k \"npm run dev -w @pandemic/web\" \"npm run dev -w @pandemic/worker\"",
     "lint": "eslint .",
-    "typecheck": "tsc -b",
+    "typecheck": "tsc -p packages/engine && tsc -p packages/protocol && tsc -p apps/web && tsc -p apps/worker",
     "test:unit": "vitest run packages",
     "build": "npm run build -w @pandemic/web && npm run build -w @pandemic/worker",
     "check:docs": "python3 scripts/validate_build_kit.py"
