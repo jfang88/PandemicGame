@@ -2,7 +2,7 @@
 
 ## What is ready
 
-This build kit makes the default product, rules, architecture, protocol, task order and test gates concrete. It contains no application implementation. Do not report an available game URL or working CI until built and verified.
+This build kit makes the default product, rules, architecture, protocol, task order and test gates concrete. It includes the T01 local React/Worker foundation. Gameplay, authentication and public deployment are not implemented. See [local development](LOCAL_DEV.md) and [T01 verification](evidence/T01.md).
 
 ## Owner account creation and secure automation
 

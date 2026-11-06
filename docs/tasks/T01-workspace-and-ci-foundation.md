@@ -3,7 +3,7 @@
 Status: in review. Dependencies: none.
 
 Completion branch: `agent/T01-complete-foundation` (the original scaffold branch was already merged).
-Dependency compatibility, lockfile, local startup and CI foundation are implemented in this follow-up. Browser acceptance awaits the CI smoke check.
+Dependency compatibility, lockfile, local startup and CI foundation are implemented in this follow-up. Browser acceptance passed the CI smoke check; review and merge remain pending.
 See [verification evidence](../evidence/T01.md) for actual checks and limitations.
 Keep T02 blocked until this completion PR passes review/CI and merges.
 
