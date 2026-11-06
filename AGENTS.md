@@ -4,6 +4,10 @@
 
 Build the 2–4-player game specified here for Cloudflare. Read docs/START_HERE.md first. User instructions take precedence; otherwise RULES.md is authoritative for gameplay, PROTOCOL.md for wire behavior, and DATA_MODEL.md for persisted state. Task files define scope and acceptance. Record contradictions rather than silently changing rules. Cosmetic choices can be made autonomously.
 
+## Cloud-provider and automation credentials
+
+Read [docs/AGENT_ACCESS.md](docs/AGENT_ACCESS.md) before any provider or deployment work. Do not request or accept raw Cloudflare, GitHub, Microsoft or Google secrets in a task prompt. Work through task branches and PRs; CI on PRs is secret-free. Preview deployments use a reviewed GitHub workflow with a preview-scoped Cloudflare token only after T17. Production deployment needs a separate explicit owner action after T18; a coding agent must not upgrade billing, bootstrap cloud accounts, administer OAuth providers, or self-authorize deployment. Do not assume an agent tool session has access to a provider simply because documentation describes setup.
+
 ## Work size and cost
 
 - Implement one ready task per branch/PR: `agent/Txx-short-description`.

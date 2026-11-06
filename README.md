@@ -23,6 +23,10 @@ After T01 merges, replace T01 with the next task whose dependencies are complete
 4. [Tasks](TASKS.md), [test scenarios](docs/ACCEPTANCE.md), and [test strategy](docs/TESTING.md).
 5. [Cloudflare setup/deployment](docs/CLOUDFLARE.md), [login setup](docs/AUTH.md), and [operations/costs](docs/OPERATIONS.md).
 
+## Set up cloud accounts and agent deployment
+
+Before staging or releasing the game, follow [owner setup and secure ChatGPT/Claude agent access](docs/AGENT_ACCESS.md). It explains Cloudflare/Firebase signup, Google and Hotmail providers, which identifiers are public, how to store scoped Cloudflare deployment tokens in GitHub environments, and why PR coding agents never receive production credentials. Setup instructions do not mean accounts or cloud resources have been provisioned.
+
 ## Hosting decision
 
 | Responsibility | Service |
