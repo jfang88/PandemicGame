@@ -2,7 +2,7 @@
 
 ## What is ready
 
-This build kit makes the default product, rules, architecture, protocol, task order and test gates concrete. It contains no application implementation. Do not report an available game URL or working CI until built and verified.
+This build kit makes the default product, rules, architecture, protocol, task order and test gates concrete. It includes the T01 local React/Worker foundation. Gameplay, authentication and public deployment are not implemented. See [local development](LOCAL_DEV.md) and [T01 verification](evidence/T01.md).
 
 ## Owner account creation and secure automation
 
@@ -43,4 +43,4 @@ The rules in RULES.md are selected defaults so work can begin immediately. Futur
 
 ## Selected low-cost identity design
 
-Firebase Authentication Spark is the sole login provider. All game hosting/storage stays on Cloudflare Free initially. Two infrequent players are the capacity baseline; 2–4-player support remains required. Task IDs and dependencies are stable, and all implementation tasks remain not started. There are no existing users/data to migrate. See AUTH.md before T11 and CLOUDFLARE.md before T17.
+Firebase Authentication Spark is the sole login provider. All game hosting/storage stays on Cloudflare Free initially. Two infrequent players are the capacity baseline; 2–4-player support remains required. Task IDs and dependencies are stable, and T01 foundation completion is in review and T02–T18 remain not started. There are no existing users/data to migrate. See AUTH.md before T11 and CLOUDFLARE.md before T17.

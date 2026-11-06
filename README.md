@@ -1,6 +1,6 @@
 # PandemicGame — Cloudflare build kit
 
-An original Pandemic-inspired cooperative browser game for **2–4 players per private room**. This repository currently contains the specification and coding-agent backlog, not a working game. The default implementation uses Cloudflare Workers, Static Assets, SQLite-backed Durable Objects, and Firebase Authentication for Microsoft/Hotmail and Google login. No LLM runs during gameplay.
+An original Pandemic-inspired cooperative browser game for **2–4 players per private room**. This repository contains the specification, coding-agent backlog and local T01 foundation, not a playable game. See [local development](docs/LOCAL_DEV.md) to run the scaffold. The default implementation uses Cloudflare Workers, Static Assets, SQLite-backed Durable Objects, and Firebase Authentication for Microsoft/Hotmail and Google login. No LLM runs during gameplay.
 
 ## Start coding
 
@@ -48,5 +48,5 @@ Budget: target **$0/month for occasional two-player use**, using Cloudflare Work
 - Fictional 48-location board, four threats, four roles, one difficulty; [spec/board.v1.json](spec/board.v1.json) supplies the canonical graph.
 - Friends join by authenticated invite link; play can pause indefinitely during disconnections, within the documented retention period.
 - All hands are visible to room members; future deck order and random seed are secret.
-- Current work is planning-only. Shell commands described for the application become available as their tasks are implemented.
+- T01 provides local development, static checks, package tests and builds. Gameplay and later test suites become available as their tasks are implemented.
 - Do not upload credentials, tokens, copied commercial artwork or rulebook text. No software license has been selected by the owner yet.
