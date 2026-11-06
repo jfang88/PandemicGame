@@ -1,13 +1,28 @@
 #!/usr/bin/env python3
 """Dependency-free validation for this planning kit, not application tests."""
 import json
+import os
 import re
 from collections import Counter
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 errors = []
-for path in root.rglob('*.md'):
+
+
+def source_files(base):
+    """Prune generated/dependency trees, but validate all authored subdirectories."""
+    excluded = {'.git', 'node_modules', 'dist', '.wrangler', 'coverage',
+                'playwright-report', 'test-results', '__pycache__'}
+    for directory, dirs, files in os.walk(base):
+        dirs[:] = sorted(name for name in dirs if name not in excluded)
+        for name in sorted(files):
+            yield Path(directory) / name
+
+
+for path in source_files(root):
+    if path.suffix != '.md':
+        continue
     for target in re.findall(r'\]\(([^)]+)\)', path.read_text()):
         if target.startswith(('https://', 'http://', '#', 'mailto:')):
             continue
@@ -49,7 +64,7 @@ for task in tasks:
 
 # Keep the provider switch consistent before any coding agent starts.
 legacy = 'supa' + 'base'
-for path in root.rglob('*'):
+for path in source_files(root):
     if path.is_file() and path.suffix in ('.md', '.json', '.jsonc'):
         assert legacy not in path.read_text().lower(), f'Obsolete provider reference: {path}'
 config_text = (root / 'config/wrangler.example.jsonc').read_text()

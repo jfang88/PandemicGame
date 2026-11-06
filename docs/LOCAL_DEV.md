@@ -1,9 +1,38 @@
-# T01 local scaffold (draft)
+# Local development
 
-Use Node from .nvmrc, npm and Python 3. Run `npm install` to create the **required lockfile**, then `npm ci`, `npm run lint`, `npm run typecheck`, `npm run test:unit`, `npm run build`, `npm run check:docs`. No dependency installation or runtime verification has yet been completed on this branch; do not merge without a committed lockfile and green checks.
+Use Node 24.22.1 from `.nvmrc` (`nvm install && nvm use`), npm 11.9.0 and Python 3.
+From the repository root:
 
-Run `npm run dev` and open http://127.0.0.1:5173. The Vite same-origin proxy sends /api/health to the local Worker at 127.0.0.1:8787. `GET /api/health` should yield JSON {"ok":true}; an unrecognized /api route should yield JSON 404. Confirm both in a browser/network tools before merging.
+```sh
+npm ci
+npm run lint
+npm run typecheck
+npm run test:unit
+npm run build
+npm run check:docs
+npm run dev
+```
 
-Optional public Firebase frontend settings are documented in config/firebase.env.example; local environment files are ignored. T01 has no authentication. Do not put secrets in VITE_ values. Integration tests start in T07, and E2E in T15, so neither command exists yet. No deployment is configured.
+Open http://127.0.0.1:5173. The React foundation screen should say **Local Worker connected**.
+The Vite same-origin proxy sends `/api/*` to the local Worker at 127.0.0.1:8787.
+`GET /api/health` returns JSON `{"ok":true}`; `/api/missing` returns JSON 404,
+never the SPA. Stop the development servers with Ctrl+C. No cloud account is needed.
 
-**Blockers remaining:** npm registry access, generation/commit of package-lock.json, verification of actual dependency compatibility and complete acceptance checks. GitHub Actions uses read-only permissions but its action tags need migration to verified full commit SHAs before merge.
+`build` produces web assets and dry-runs the local Worker bundle; it does not deploy.
+`apps/worker/wrangler.local.jsonc` has no room bindings or migrations.
+The root deployment configuration remains a template until T17.
+
+Optional public Firebase settings are documented in [firebase.env.example](../config/firebase.env.example).
+T01 has no authentication and needs no environment file. Later, public web settings go
+in ignored `apps/web/.env.local`; never put secrets in `VITE_` values.
+Run `npx playwright install chromium` once, then `npm run test:smoke` with the
+usual dev servers stopped for the T01 browser/Worker smoke check. It manages its
+own servers on ports 5173/8787; the Worker inspector uses 9230. Linux CI installs
+browser system dependencies with `npx playwright install --with-deps chromium`.
+Integration tests start in T07 and multiplayer E2E tests in T15; neither script exists yet.
+
+Dependency changes must regenerate the single root lockfile with `npm install`, then
+pass `npm ci` and the checks above. Do not use force/legacy-peer-deps to conceal conflicts.
+Vitest 4.1.12 matches the current Cloudflare Workers pool peer range (`^4.1.0`);
+T07 must recheck compatibility when adding that pool. The browser smoke check in
+[T01 evidence](evidence/T01.md) is not the later multiplayer E2E suite.
