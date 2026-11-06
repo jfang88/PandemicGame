@@ -1,6 +1,9 @@
 # T02 — State types and deterministic setup
 
-Status: not started. Dependencies: T01.
+Status: in review. Dependencies: T01.
+
+Implementation: `agent/T02-state-types-and-deterministic-setup`. T01 dependency merged
+in PR #22 with passing final CI. See [verification evidence](../evidence/T02.md).
 
 ## Read
 
