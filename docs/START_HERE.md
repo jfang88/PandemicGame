@@ -4,6 +4,10 @@
 
 This build kit makes the default product, rules, architecture, protocol, task order and test gates concrete. It contains no application implementation. Do not report an available game URL or working CI until built and verified.
 
+## Owner account creation and secure automation
+
+Follow [owner onboarding and coding-agent deployment access](AGENT_ACCESS.md) for step-by-step Cloudflare/Firebase registration, Google/Hotmail setup, Cloudflare token scopes, GitHub secrets, separate preview/production privileges, and safe ChatGPT/Claude workflows. This is preparatory documentation; no provider resources are claimed to exist.
+
 ## Owner setup versus agent work
 
 An agent can complete T01–T10 and most auth/backend code locally without account secrets. The owner supplies Cloudflare account access through secure credentials, a Firebase Spark project, and Microsoft OAuth registration/Google provider configuration before real-provider staging tests. See AUTH.md and CLOUDFLARE.md. Never paste secrets into an issue or prompt.
