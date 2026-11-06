@@ -1,10 +1,10 @@
 # Implementation backlog
 
-All tasks are **not started**. This build kit is not the application. Numeric order is safe; dependencies are authoritative. Change status to in review in the task PR, and done only after merge and gate evidence. If a provider setup is missing, record blocked rather than passed.
+T01 has a partial implementation in draft review, blocked on dependency lockfile and runtime checks. All other tasks are **not started**. The build kit now includes an unverified scaffold, not a working game. Numeric order is safe; dependencies are authoritative. Change status to in review in the task PR, and done only after merge and gate evidence. If a provider setup is missing, record blocked rather than passed.
 
 | Task | Dependencies | Status | Specification | GitHub issue |
 | --- | --- | --- | --- | --- |
-| T01: Workspace and CI foundation | — | not started | [Task prompt](docs/tasks/T01-workspace-and-ci-foundation.md) | [#1](https://github.com/jfang88/PandemicGame/issues/1) |
+| T01: Workspace and CI foundation | — | in review (blocked) | [Task prompt](docs/tasks/T01-workspace-and-ci-foundation.md) | [#1](https://github.com/jfang88/PandemicGame/issues/1) |
 | T02: State types and deterministic setup | T01 | not started | [Task prompt](docs/tasks/T02-state-types-and-deterministic-setup.md) | [#2](https://github.com/jfang88/PandemicGame/issues/2) |
 | T03: Movement treatment and construction | T02 | not started | [Task prompt](docs/tasks/T03-movement-treatment-and-construction.md) | [#3](https://github.com/jfang88/PandemicGame/issues/3) |
 | T04: Sharing cures and discard continuations | T03 | not started | [Task prompt](docs/tasks/T04-sharing-cures-and-discard-continuations.md) | [#4](https://github.com/jfang88/PandemicGame/issues/4) |
@@ -36,4 +36,4 @@ Machine-readable task dependencies and acceptance criteria: [spec/tasks.json](sp
 
 ## Architecture baseline
 
-Use Cloudflare Workers Free + SQLite Durable Objects for the game and Firebase Authentication Spark for Google/Microsoft login. T11 and T17 specify the identity implementation/setup; all task IDs and dependencies are unchanged. No implementation tasks have started. Firebase UID is not a UUID, and the backend verifies Firebase ID tokens using fixed Google certificates. See [AUTH.md](docs/AUTH.md).
+Use Cloudflare Workers Free + SQLite Durable Objects for the game and Firebase Authentication Spark for Google/Microsoft login. T11 and T17 specify the identity implementation/setup; all task IDs and dependencies are unchanged. T01 has an unverified draft scaffold; all later tasks remain not started. Firebase UID is not a UUID, and the backend verifies Firebase ID tokens using fixed Google certificates. See [AUTH.md](docs/AUTH.md).
