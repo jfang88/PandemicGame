@@ -6,6 +6,10 @@ Use Firebase Authentication on the no-cost Spark plan, exclusively for identity.
 
 This replaces the previous identity design before coding starts: no user migration, dual-provider backend or compatibility shim is needed. The SDK's Firebase auth helper domain may be used for sign-in; this does not move game hosting off Cloudflare.
 
+## Signup and credential walkthrough
+
+For detailed Firebase Console project creation, Spark-plan selection, Web-app registration, Google and Microsoft/Hotmail provider setup, authorized domains, Microsoft helper callback, secret handling and the recommended **no Firebase service-account key** approach, see [owner onboarding](AGENT_ACCESS.md). Firebase is identity-only; Cloudflare deploy automation requires no Firebase administrative credential. Human owner setup precedes live OAuth validation.
+
 ## Owner setup
 
 1. Create separate Firebase projects for preview and production on Spark, register a Web app in each, and record the Web SDK config: apiKey, authDomain, projectId, appId. These identifiers are public configuration, not server credentials. Do not enable unrelated paid products.
