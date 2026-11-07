@@ -11,10 +11,16 @@
       "vite/client"
     ],
     "composite": true,
+    "resolveJsonModule": true,
+    "rootDir": "../..",
     "tsBuildInfoFile": "../../node_modules/.cache/web.tsbuildinfo"
   },
   "include": [
     "src",
-    "vite.config.ts"
-  ]
+    "tests",
+    "vite.config.ts",
+    "../../packages/engine/src/*.ts",
+    "../../spec/board.v1.json"
+  ],
+  "exclude": ["../../packages/engine/src/*.test.ts"]
 }

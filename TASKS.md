@@ -24,7 +24,7 @@ after T06 merges. Independent reference calculations and read-only review can ru
 | T09: Private lobby invites and membership | T08 | not started | [Task prompt](docs/tasks/T09-private-lobby-invites-and-membership.md) | [#9](https://github.com/jfang88/PandemicGame/issues/9) |
 | T10: Hibernating realtime and reconnect | T09 | not started | [Task prompt](docs/tasks/T10-hibernating-realtime-and-reconnect.md) | [#10](https://github.com/jfang88/PandemicGame/issues/10) |
 | T11: Microsoft Google auth and authorization | T10 | not started | [Task prompt](docs/tasks/T11-microsoft-google-auth-and-authorization.md) | [#11](https://github.com/jfang88/PandemicGame/issues/11) |
-| T12: Local playable board interface | T06 | not started | [Task prompt](docs/tasks/T12-local-playable-board-interface.md) | [#12](https://github.com/jfang88/PandemicGame/issues/12) |
+| T12: Local playable board interface | T06 | in review | [Task prompt](docs/tasks/T12-local-playable-board-interface.md) | [#12](https://github.com/jfang88/PandemicGame/issues/12) |
 | T13: Connected lobby and multiplayer UI | T11, T12 | not started | [Task prompt](docs/tasks/T13-connected-lobby-and-multiplayer-ui.md) | [#13](https://github.com/jfang88/PandemicGame/issues/13) |
 | T14: Durable resume retention and compatibility | T13 | not started | [Task prompt](docs/tasks/T14-durable-resume-retention-and-compatibility.md) | [#14](https://github.com/jfang88/PandemicGame/issues/14) |
 | T15: Multiplayer browser regression suite | T14 | not started | [Task prompt](docs/tasks/T15-multiplayer-browser-regression-suite.md) | [#15](https://github.com/jfang88/PandemicGame/issues/15) |
