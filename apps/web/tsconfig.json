@@ -20,7 +20,8 @@
     "tests",
     "vite.config.ts",
     "../../packages/engine/src/*.ts",
+    "../../packages/protocol/src/*.ts",
     "../../spec/board.v1.json"
   ],
-  "exclude": ["../../packages/engine/src/*.test.ts"]
+  "exclude": ["../../packages/engine/src/*.test.ts", "../../packages/protocol/src/*.test.ts"]
 }

@@ -141,6 +141,15 @@ it('recovers a leave receipt when socket access ends before the HTTP acknowledge
   expect(await client.transport.submit({ type: 'LEAVE_LOBBY', payload: {} }))
     .toMatchObject({ ok: true, receipt: { commandId: firstId, acceptedVersion: 3 } });
   expect(client.transport.getState().online).toBe(false);
+  expect(client.transport.getState()).toMatchObject({ ended: 'access-ended', snapshot: null });
+});
+
+it('does not submit an intent against a revision newer than the rendered room', async () => {
+  const client = fixture();
+  await vi.waitFor(() => expect(client.sockets).toHaveLength(1));
+  client.sockets[0]!.snapshot(4);
+  expect(await client.transport.submit(pass, 3)).toMatchObject({ ok: false, code: 'STALE_VERSION' });
+  expect(client.requests).toHaveLength(0);
 });
 
 it('force-refreshes a rejected token once and submits the same command envelope', async () => {

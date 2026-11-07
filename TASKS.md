@@ -11,7 +11,8 @@ T07 and T12 are **done**. [PR #28](https://github.com/jfang88/PandemicGame/pull/
 T08 is **done**. [PR #30](https://github.com/jfang88/PandemicGame/pull/30) merged with [passing CI](https://github.com/jfang88/PandemicGame/actions/runs/42360365821).
 T09 is **done**. [PR #31](https://github.com/jfang88/PandemicGame/pull/31) merged with [passing CI](https://github.com/jfang88/PandemicGame/actions/runs/42361399463).
 T10 is **done**. [PR #32](https://github.com/jfang88/PandemicGame/pull/32) merged with [passing CI](https://github.com/jfang88/PandemicGame/actions/runs/42363792477).
-T11 is **in review**. See the [Firebase authentication gate report](docs/evidence/T11.md).
+T11 is **done**. [PR #33](https://github.com/jfang88/PandemicGame/pull/33) merged. See the [Firebase authentication gate report](docs/evidence/T11.md).
+T13 is **in review**. See the [connected lobby gate report](docs/evidence/T13.md).
 Merge reviewed work before starting its dependents.
 
 | Task | Dependencies | Status | Specification | GitHub issue |
@@ -26,9 +27,9 @@ Merge reviewed work before starting its dependents.
 | T08: Atomic command execution and retry safety | T07 | done | [Task prompt](docs/tasks/T08-atomic-command-execution-and-retry-safety.md) | [#8](https://github.com/jfang88/PandemicGame/issues/8) |
 | T09: Private lobby invites and membership | T08 | done | [Task prompt](docs/tasks/T09-private-lobby-invites-and-membership.md) | [#9](https://github.com/jfang88/PandemicGame/issues/9) |
 | T10: Hibernating realtime and reconnect | T09 | done | [Task prompt](docs/tasks/T10-hibernating-realtime-and-reconnect.md) | [#10](https://github.com/jfang88/PandemicGame/issues/10) |
-| T11: Microsoft Google auth and authorization | T10 | in review | [Task prompt](docs/tasks/T11-microsoft-google-auth-and-authorization.md) | [#11](https://github.com/jfang88/PandemicGame/issues/11) |
+| T11: Microsoft Google auth and authorization | T10 | done | [Task prompt](docs/tasks/T11-microsoft-google-auth-and-authorization.md) | [#11](https://github.com/jfang88/PandemicGame/issues/11) |
 | T12: Local playable board interface | T06 | done | [Task prompt](docs/tasks/T12-local-playable-board-interface.md) | [#12](https://github.com/jfang88/PandemicGame/issues/12) |
-| T13: Connected lobby and multiplayer UI | T11, T12 | not started | [Task prompt](docs/tasks/T13-connected-lobby-and-multiplayer-ui.md) | [#13](https://github.com/jfang88/PandemicGame/issues/13) |
+| T13: Connected lobby and multiplayer UI | T11, T12 | in review | [Task prompt](docs/tasks/T13-connected-lobby-and-multiplayer-ui.md) | [#13](https://github.com/jfang88/PandemicGame/issues/13) |
 | T14: Durable resume retention and compatibility | T13 | not started | [Task prompt](docs/tasks/T14-durable-resume-retention-and-compatibility.md) | [#14](https://github.com/jfang88/PandemicGame/issues/14) |
 | T15: Multiplayer browser regression suite | T14 | not started | [Task prompt](docs/tasks/T15-multiplayer-browser-regression-suite.md) | [#15](https://github.com/jfang88/PandemicGame/issues/15) |
 | T16: Abuse controls observability and load | T15 | not started | [Task prompt](docs/tasks/T16-abuse-controls-observability-and-load.md) | [#16](https://github.com/jfang88/PandemicGame/issues/16) |

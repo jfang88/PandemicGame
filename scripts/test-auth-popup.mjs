@@ -27,7 +27,7 @@ async function verifyConfiguredBuild() {
     const files = (Array.isArray(result) ? result : [result]).flatMap(item => item.output);
     const output = files.map(file => file.type === 'chunk' ? file.code : String(file.source)).join('\n');
     assert.match(output, /microsoft\.com/);
-    assert.doesNotMatch(output, /firebase-local-popup-fixture|mock-refreshed-token|x-pandemic-test-uid|FIREBASE_AUTH_EMULATOR_HOST|PandemicGame local test|BEGIN PRIVATE KEY/);
+    assert.doesNotMatch(output, /firebase-local-popup-fixture|mock-refreshed-token|x-pandemic-test-uid|FIREBASE_AUTH_EMULATOR_HOST|PandemicGame local test|BEGIN PRIVATE KEY|local\.html|local-fixture|\brngState\b|\bplayerDeck\b/);
     console.log('PASS: configured production auth build excludes local identities, fixtures and emulator settings');
   } finally {
     for (const [key, value] of previous) {
@@ -45,6 +45,8 @@ try {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
+  await page.route(url => url.origin === origin && /^\/api\/rooms\/[^/]+$/.test(url.pathname),
+    route => route.fulfill({ status: 403, json: { error: { code: 'NOT_MEMBER' } } }));
   await page.route(url => url.origin === origin && /^\/(login$|rooms\/|join\/)/.test(url.pathname),
     async route => route.fulfill({
       contentType: 'text/html',

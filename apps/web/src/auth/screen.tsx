@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { RoomHome } from '../connected/home';
+import { ConnectedRoom } from '../connected/room';
 import { captureInvite, clearInvite, popupMessage, roomPath, safeReturnPath,
   type AuthAdapter, type AuthSession, type PendingInvite, type Provider } from './session';
 
@@ -87,11 +89,16 @@ export function AuthScreen({ auth }: { auth: AuthAdapter }) {
     location.replace('/');
   }
 
+  if (session && room?.kind === 'rooms') return <ConnectedRoom key={session.uid + ':' + room.id}
+    auth={auth} uid={session.uid} roomId={room.id} signOut={() => void signOut()}
+    signOutBusy={busy} signOutError={message} />;
+
   return <main>
     <p className="eyebrow">PRIVATE CO-OP GAME</p>
     <h1>{room?.kind === 'join' ? 'Join a private room' : 'PandemicGame sign-in'}</h1>
     {session === undefined ? <p role="status">Checking your session…</p> : session ? <>
       <p role="status">Signed in.</p>
+      {!room && !returnPath && <RoomHome key={session.uid} auth={auth} uid={session.uid} />}
       {room?.kind === 'join' && (invite
         ? <button disabled={busy} onClick={() => void join()}>Join room</button>
         : <p>Open an invite link from the room owner to join.</p>)}

@@ -112,6 +112,17 @@ it('rejects expired tickets and never takes test identity from the normal Worker
   expect(normal.status).toBe(401);
 });
 
+it('accepts an empty streamed ticket request and rejects a nonempty body', async () => {
+  const { path } = await room();
+  const headers = { origin: host, 'x-pandemic-test-uid': userId };
+  const empty = new ReadableStream<Uint8Array>({ start: controller => controller.close() });
+  const accepted = await worker.fetch(host + path + '/ws-ticket', { method: 'POST', headers, body: empty });
+  expect(accepted.status).toBe(200);
+  expect(await accepted.json()).toMatchObject({ ticket: expect.any(String) });
+  const rejected = await worker.fetch(host + path + '/ws-ticket', { method: 'POST', headers, body: '{}' });
+  expect(rejected.status).toBe(400);
+});
+
 it('migrates an existing v3 room before issuing realtime tickets', async () => {
   const { path, stub } = await room();
   expect((await command(path, 0, 'SELECT_ROLE', { role: 'medic' })).status).toBe(200);

@@ -25,7 +25,7 @@ function App() {
     <section aria-label="Development status">
       <strong>Foundation preview</strong>
       <p>{health}</p>
-      <p>The connected room interface will arrive in a later task.</p>
+      <p>Sign in to create or join a private room.</p>
       <p><a href="/login">Sign in</a></p>
       {import.meta.env.DEV && <p><a href="/local.html">Play a local game</a></p>}
     </section>

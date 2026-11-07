@@ -1,6 +1,8 @@
 # T13 — Connected lobby and multiplayer UI
 
-Status: not started. Dependencies: T11, T12.
+Status: in review. Dependencies: T11, T12.
+
+See the [connected lobby gate report](../evidence/T13.md).
 
 ## Read
 
