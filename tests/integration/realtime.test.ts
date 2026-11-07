@@ -1,6 +1,7 @@
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import { env, exports } from 'cloudflare:workers';
-import { expect, it } from 'vitest';
+import { beforeEach, expect, it } from 'vitest';
+import { sha256 } from '../../apps/worker/src/command-hash';
 import normalWorker, { type Env } from '../../apps/worker/src/index';
 
 const bindings = env as Env;
@@ -8,6 +9,11 @@ const worker = (exports as unknown as { default: Fetcher }).default;
 const host = 'http://127.0.0.1:8787';
 const alternateOrigin = 'http://127.0.0.1:5173';
 const userId = 'firebase:stable-owner';
+
+beforeEach(async () => {
+  const stub = bindings.CREATE_BUDGETS!.getByName(await sha256(userId));
+  await runInDurableObject(stub, (_instance, ctx) => ctx.storage.sql.exec('DELETE FROM budget'));
+});
 
 async function room() {
   const id = crypto.randomUUID();
@@ -240,4 +246,16 @@ it('retires an idle room, revokes its live sockets and denies outstanding ticket
   expect(await runDurableObjectAlarm(stub)).toBe(true);
   expect((await end).reason).toBe('Room expired');
   expect((await upgrade(path, spare.ticket)).status).toBe(401);
+});
+
+it('bounds pending tickets and rejects an oversized socket message', async () => {
+  const { path } = await room();
+  const tickets = await Promise.all(Array.from({ length: 4 }, () => issue(path)));
+  const blocked = await ticket(path);
+  expect(blocked.status).toBe(429);
+  expect(Number(blocked.headers.get('retry-after'))).toBeGreaterThan(0);
+  const socket = await open(path, tickets[0]!.ticket);
+  const end = closed(socket);
+  socket.send('x'.repeat(4097));
+  expect((await end).code).toBe(1009);
 });

@@ -1,6 +1,7 @@
 /* global window, document, requestAnimationFrame */
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
+import { setTimeout as delay } from 'node:timers/promises';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { chromium } from 'playwright';
@@ -108,15 +109,24 @@ try {
   }
 
   async function accepted(client, path, act) {
-    const [response] = await Promise.all([
-      client.page.waitForResponse(response => response.request().method() === 'POST'
-        && new URL(response.url()).pathname.endsWith(path), { timeout: 10_000 }),
-      act(),
-    ]);
-    assert.equal(response.status(), 200);
-    const body = await response.json();
-    assert.equal(body.duplicate, false);
-    return body;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const [response] = await Promise.all([
+        client.page.waitForResponse(response => response.request().method() === 'POST'
+          && new URL(response.url()).pathname.endsWith(path), { timeout: 10_000 }),
+        act(),
+      ]);
+      if (response.status() === 429) {
+        const retryAfter = Number(response.headers()['retry-after']);
+        assert.ok(Number.isInteger(retryAfter) && retryAfter >= 1 && retryAfter <= 2);
+        await delay(retryAfter * 1000 + 50);
+        continue;
+      }
+      assert.equal(response.status(), 200);
+      const body = await response.json();
+      assert.equal(body.duplicate, false);
+      return body;
+    }
+    throw new Error('Command did not recover after its bounded rate-limit wait');
   }
 
   async function fullMatch(clients, state, step) {

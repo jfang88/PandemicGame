@@ -51,6 +51,7 @@ class LocalGameRoom extends BaseGameRoom {
 }
 
 export { LocalGameRoom as GameRoom };
+export { CreateBudget } from './limits';
 
 function fixtureError(code: ErrorCode): Response {
   const { status, body } = apiError(code, 'Local fixture request failed.', false);

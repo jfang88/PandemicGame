@@ -14,6 +14,6 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api", "/api/*", "/__test/*"]
   },
-  "durable_objects": { "bindings": [{ "name": "GAME_ROOMS", "class_name": "GameRoom" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }]
+  "durable_objects": { "bindings": [{ "name": "GAME_ROOMS", "class_name": "GameRoom" }, { "name": "CREATE_BUDGETS", "class_name": "CreateBudget" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }, { "tag": "v2", "new_sqlite_classes": ["CreateBudget"] }]
 }
