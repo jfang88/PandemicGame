@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import { apiError, isUserId, PROTOCOL_VERSION, type ErrorCode, type PublicRoomSnapshot } from '@pandemic/protocol';
+import { chargeRoom } from './limits';
 import { sha256 } from './command-hash';
 import type { Env } from './router';
 
@@ -16,8 +17,10 @@ export function allowedSocketOrigin(request: Request, env: Env): string | null {
 }
 
 function socketError(code: ErrorCode, message: string): Response {
-  const { body, status } = apiError(code, message);
-  return Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
+  const { body, status } = apiError(code, message, code === 'RATE_LIMITED');
+  const headers = new Headers({ 'cache-control': 'no-store' });
+  if (status === 429) headers.set('retry-after', '2');
+  return Response.json(body, { status, headers });
 }
 
 function attachment(socket: WebSocket): Attachment | null {
@@ -47,7 +50,9 @@ export abstract class RealtimeRoom extends DurableObject<Env> {
   protected abstract expireRetention(now: number): boolean;
   abstract read(userId: string): { snapshot: PublicRoomSnapshot } | { code: ErrorCode };
 
-  async issueSocketTicket(userId: string, origin: string, authExpiresAt: number) {
+  async issueSocketTicket(userId: string, origin: string, authExpiresAt: number): Promise<
+    { ticket: string; expiresAt: string } | { code: ErrorCode; retryAfter?: number }
+  > {
     if (!Number.isSafeInteger(authExpiresAt) || authExpiresAt <= Date.now()) return { code: 'TOKEN_EXPIRED' } as const;
     const ticket = Array.from(crypto.getRandomValues(new Uint8Array(32)),
       byte => byte.toString(16).padStart(2, '0')).join('');
@@ -57,6 +62,14 @@ export abstract class RealtimeRoom extends DurableObject<Env> {
       if ('code' in access) return access;
       const now = Date.now();
       if (authExpiresAt <= now) return { code: 'TOKEN_EXPIRED' } as const;
+      const sql = this.ctx.storage.sql;
+      sql.exec('DELETE FROM socket_tickets WHERE expiresAt <= ?', now);
+      const pending = sql.exec<{ room: number; user: number }>(
+        'SELECT count(*) AS room, count(CASE WHEN userId = ? THEN 1 END) AS user FROM socket_tickets', userId,
+      ).one();
+      if (pending.user >= 4 || pending.room >= 16) return { code: 'RATE_LIMITED', retryAfter: 60 } as const;
+      const limited = chargeRoom(sql, 'ticket:' + userId, now, 8);
+      if (limited) return limited;
       const expiresAt = Math.min(authExpiresAt, now + TICKET_TTL_MS);
       this.ctx.storage.sql.exec(`INSERT INTO socket_tickets (hash, userId, origin, expiresAt, authExpiresAt)
         VALUES (?, ?, ?, ?, ?)`, hash, userId, origin, expiresAt, authExpiresAt);
@@ -164,8 +177,12 @@ export abstract class RealtimeRoom extends DurableObject<Env> {
     }
   }
 
-  webSocketMessage(socket: WebSocket): void {
-    close(socket, 1008, 'Use HTTPS for commands');
+  webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): void {
+    const oversized = typeof message === 'string'
+      ? message.length > 4096 || new TextEncoder().encode(message).byteLength > 4096
+      : message.byteLength > 4096;
+    if (oversized) close(socket, 1009, 'Socket frame too large');
+    else close(socket, 1008, 'Use HTTPS for commands');
   }
 
   webSocketClose(socket: WebSocket): void {

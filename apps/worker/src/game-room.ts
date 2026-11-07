@@ -3,11 +3,13 @@ import { projectRoom, PROTOCOL_VERSION, sanitizeDisplayName, type CommandAccepta
   type ErrorCode, type InviteAcceptance, type PublicRoomSnapshot, type RoomEventData, type RoomMember } from '@pandemic/protocol';
 import { commandHash, requestHash, sha256 } from './command-hash';
 import { applyLobbyCommand, gameSeed, isLobbyCommand } from './lobby';
+import { chargeRoom } from './limits';
 import { RealtimeRoom } from './realtime-room';
 import type { Env } from './router';
 
 const SCHEMA_VERSION = 1;
-const STORAGE_VERSION = 5;
+const STORAGE_VERSION = 6;
+const MAX_SNAPSHOT_BYTES = 64 * 1024;
 const DAY_MS = 86_400_000;
 const ABANDONED_RECEIPT_MS = 60_000;
 type RoomRow = {
@@ -24,13 +26,13 @@ type RoomRow = {
 };
 
 type ReadResult = { readonly snapshot: PublicRoomSnapshot }
-  | { readonly code: 'ROOM_NOT_FOUND' | 'ROOM_EXPIRED' | 'NOT_MEMBER' | 'ROOM_INCOMPATIBLE' };
+  | { readonly code: 'ROOM_NOT_FOUND' | 'ROOM_EXPIRED' | 'NOT_MEMBER' | 'ROOM_INCOMPATIBLE' | 'INTERNAL_ERROR' };
 type CreateResult = { readonly roomId: string; readonly version: number }
   | { readonly code: 'ROOM_CONFLICT' | 'ROOM_EXPIRED' | 'ROOM_INCOMPATIBLE' };
 export type ReceiptKind = 'command' | 'leave' | 'invite' | 'join';
 type Receipt = { requestHash: string; acceptedRevision: number; kind: ReceiptKind; privateResult: string | null };
 type EventRow = { revision: number; eventIndex: number; timestamp: string; eventJson: string };
-type Failure = { readonly code: ErrorCode; readonly currentVersion?: number };
+type Failure = { readonly code: ErrorCode; readonly currentVersion?: number; readonly retryAfter?: number };
 type Mutation<T> = Failure | { response: T; publish?: true };
 
 function acceptance(commandId: string, acceptedVersion: number, duplicate: boolean): CommandReceipt {
@@ -57,9 +59,11 @@ export class GameRoom extends RealtimeRoom {
         sql.exec('CREATE TABLE IF NOT EXISTS metadata (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), version INTEGER NOT NULL)');
         const metadata = sql.exec<{ version: number }>('SELECT version FROM metadata WHERE singleton = 1').toArray()[0];
         if (metadata?.version === STORAGE_VERSION) return true;
-        if (metadata && ![1, 2, 3, 4].includes(metadata.version)) return false;
-        if (metadata?.version !== 4) this.migrateLegacyStorage(metadata?.version);
-        sql.exec('CREATE TABLE retirement (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), untilMs INTEGER)');
+        if (metadata && ![1, 2, 3, 4, 5].includes(metadata.version)) return false;
+        if (!metadata || metadata.version < 4) this.migrateLegacyStorage(metadata?.version);
+        sql.exec('CREATE TABLE IF NOT EXISTS retirement (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), untilMs INTEGER)');
+        sql.exec('CREATE TABLE IF NOT EXISTS room_limits (scope TEXT PRIMARY KEY NOT NULL, readyAt INTEGER NOT NULL)');
+        sql.exec('CREATE INDEX IF NOT EXISTS room_limits_expiry ON room_limits (readyAt)');
         sql.exec(`INSERT INTO metadata (singleton, version) VALUES (1, ?)
           ON CONFLICT (singleton) DO UPDATE SET version = excluded.version`, STORAGE_VERSION);
         return true;
@@ -157,6 +161,7 @@ export class GameRoom extends RealtimeRoom {
       const until = deadline + 30 * DAY_MS;
       sql.exec('INSERT INTO retirement (singleton, untilMs) VALUES (1, ?)', until > now ? until : null);
       sql.exec('DELETE FROM socket_tickets');
+      sql.exec('DELETE FROM room_limits');
       sql.exec('DELETE FROM commands');
       sql.exec('DELETE FROM events');
       sql.exec('DELETE FROM members');
@@ -222,10 +227,14 @@ export class GameRoom extends RealtimeRoom {
     if (!room) return { code: this.missingRoom() };
     if (!this.hasMember(userId)) return { code: 'NOT_MEMBER' };
     if (!this.supports(room)) return { code: 'ROOM_INCOMPATIBLE' };
-    const game = this.loadGame(room);
-    if (game && !this.supports(game)) return { code: 'ROOM_INCOMPATIBLE' };
-    if (this.expired(room)) return { code: 'ROOM_EXPIRED' };
-    return { snapshot: this.snapshot(room, game) };
+    try {
+      const game = this.loadGame(room);
+      if (game && !this.supports(game)) return { code: 'ROOM_INCOMPATIBLE' };
+      if (this.expired(room)) return { code: 'ROOM_EXPIRED' };
+      return { snapshot: this.snapshot(room, game) };
+    } catch {
+      return { code: 'INTERNAL_ERROR' };
+    }
   }
 
   private loadGame(room: RoomRow): GameState | null {
@@ -236,9 +245,13 @@ export class GameRoom extends RealtimeRoom {
     const recentEvents = this.ctx.storage.sql.exec<EventRow>(
       'SELECT revision, eventIndex, timestamp, eventJson FROM events ORDER BY revision DESC, eventIndex DESC LIMIT 30',
     ).toArray().reverse().map(({ eventJson, ...metadata }) => ({ ...metadata, event: JSON.parse(eventJson) as RoomEventData }));
-    return projectRoom({ roomId: room.roomId, schemaVersion: SCHEMA_VERSION,
+    const snapshot = projectRoom({ roomId: room.roomId, schemaVersion: SCHEMA_VERSION,
       rulesVersion: RULES_VERSION, boardVersion: BOARD_VERSION, revision: room.revision,
       lifecycle: room.lifecycle, ownerUserId: room.ownerUserId, members: this.members(), game, recentEvents });
+    if (new TextEncoder().encode(JSON.stringify(snapshot)).byteLength > MAX_SNAPSHOT_BYTES) {
+      throw new Error('Public snapshot exceeds its size limit');
+    }
+    return snapshot;
   }
 
   private async commit<T>(mutate: () => Mutation<T>): Promise<T | Failure> {
@@ -296,13 +309,13 @@ export class GameRoom extends RealtimeRoom {
 
     const sql = this.ctx.storage.sql;
     const receipt = this.receipt(userId, commandId);
-    if (receipt) {
-      if (receipt.kind !== (type === 'LEAVE_LOBBY' ? 'leave' : 'command') || receipt.requestHash !== hash) {
-        return { code: 'COMMAND_ID_REUSED' };
-      }
+    if (receipt && receipt.kind === (type === 'LEAVE_LOBBY' ? 'leave' : 'command') && receipt.requestHash === hash) {
       const recorded = acceptance(commandId, receipt.acceptedRevision, true);
       return { response: receipt.kind === 'leave' ? recorded : { ...recorded, snapshot: this.snapshot(room, game) } };
     }
+    const limited = chargeRoom(this.ctx.storage.sql, 'command:' + userId, now, 10);
+    if (limited) return limited;
+    if (receipt) return { code: 'COMMAND_ID_REUSED' };
     if (expectedVersion !== room.revision) return { code: 'STALE_VERSION', currentVersion: room.revision };
     const timestamp = new Date(now).toISOString();
     const revision = room.revision + 1;
@@ -351,11 +364,13 @@ export class GameRoom extends RealtimeRoom {
       if (this.expired(room, now)) return { code: 'ROOM_EXPIRED' };
       if (room.ownerUserId !== userId) return { code: 'NOT_OWNER' };
       const receipt = this.receipt(userId, commandId);
-      if (receipt) {
-        if (receipt.kind !== 'invite' || receipt.requestHash !== hash) return { code: 'COMMAND_ID_REUSED' };
+      if (receipt?.kind === 'invite' && receipt.requestHash === hash) {
         if (!receipt.privateResult) return { code: 'INTERNAL_ERROR' };
         return { response: { ...acceptance(commandId, receipt.acceptedRevision, true), inviteSecret: receipt.privateResult } };
       }
+      const limited = chargeRoom(this.ctx.storage.sql, 'command:' + userId, now, 10);
+      if (limited) return limited;
+      if (receipt) return { code: 'COMMAND_ID_REUSED' };
       if (expectedVersion !== room.revision) return { code: 'STALE_VERSION', currentVersion: room.revision };
       if (room.lifecycle !== 'LOBBY') return { code: 'ROOM_STARTED' };
       const revision = room.revision + 1;

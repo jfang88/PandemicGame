@@ -22,7 +22,8 @@
     "test:smoke": "node scripts/smoke-foundation.mjs",
     "test:auth-smoke": "node scripts/test-auth-popup.mjs",
     "test:connected-smoke": "node scripts/test-connected-room.mjs",
-    "test:e2e": "node scripts/test-connected-room.mjs --full"
+    "test:e2e": "node scripts/test-connected-room.mjs --full",
+    "test:load": "node scripts/load-rooms.mjs"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.6.0",

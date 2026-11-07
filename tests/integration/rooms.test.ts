@@ -2,7 +2,9 @@ import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from 'c
 import { env, exports } from 'cloudflare:workers';
 import { applyCommand, createGame, type GameState, type LocationCardId } from '@pandemic/engine';
 import type { CommandEnvelope } from '@pandemic/protocol';
-import { expect, it } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
+import { route } from '../../apps/worker/src/router';
+import { sha256 } from '../../apps/worker/src/command-hash';
 import normalWorker, { type Env } from '../../apps/worker/src/index';
 import type { GameRoom as LocalRoom } from '../../apps/worker/src/local-test';
 
@@ -12,6 +14,11 @@ const local = 'http://127.0.0.1';
 const identityHeader = 'x-pandemic-test-uid';
 const owner = "Firebase|Owner'; DROP TABLE room;--";
 const other = 'Firebase:Guest';
+
+beforeEach(async () => {
+  const stub = bindings.CREATE_BUDGETS!.getByName(await sha256(owner));
+  await runInDurableObject(stub, (_instance, ctx) => ctx.storage.sql.exec('DELETE FROM budget'));
+});
 
 function request(path: string, uid?: string, options: RequestInit = {}) {
   const headers = new Headers(options.headers);
@@ -415,4 +422,88 @@ it('keeps the browser fixture endpoint out of the normal Worker', async () => {
     body: JSON.stringify({ scenario: 'win' }),
   }), { GAME_ROOMS: bindings.GAME_ROOMS, FIREBASE_PROJECT_ID: bindings.FIREBASE_PROJECT_ID });
   await error(response, 404, 'ROOM_NOT_FOUND');
+});
+
+it('enforces the hourly create budget across room IDs, concurrent attempts and eviction', async () => {
+  const uid = 'create-rate-test';
+  const ids = Array.from({ length: 12 }, () => crypto.randomUUID());
+  const responses = await Promise.all(ids.map(id => create(id, uid)));
+  expect(responses.filter(response => response.status === 200)).toHaveLength(10);
+  const limited = responses.filter(response => response.status === 429);
+  expect(limited).toHaveLength(2);
+  expect(Number(limited[0]?.headers.get('retry-after'))).toBeGreaterThan(3500);
+  const stub = bindings.CREATE_BUDGETS!.getByName(await sha256(uid));
+  await evictDurableObject(stub);
+  expect((await create(crypto.randomUUID(), uid)).status).toBe(429);
+  const accepted = ids[responses.findIndex(response => response.status === 200)]!;
+  expect((await create(accepted, uid)).status).toBe(200);
+  expect((await create(crypto.randomUUID(), uid + '-other')).status).toBe(200);
+  await runInDurableObject(stub, (_instance, ctx) => ctx.storage.sql.exec('UPDATE budget SET endsAt = 1'));
+  expect((await create(crypto.randomUUID(), uid)).status).toBe(200);
+});
+
+it('limits durable command attempts without blocking exact accepted retries', async () => {
+  const { roomId, stub } = await roomWithGame(newGame());
+  const original = pass(1);
+  expect((await submit(roomId, original)).status).toBe(200);
+  for (let index = 0; index < 9; index++) expect((await submit(roomId, pass(1))).status).toBe(409);
+  await evictDurableObject(stub);
+  const limited = await submit(roomId, { ...original, expectedVersion: 2 });
+  expect(limited.status).toBe(429);
+  expect(Number(limited.headers.get('retry-after'))).toBeGreaterThan(0);
+  expect(await limited.json()).toMatchObject({ error: { code: 'RATE_LIMITED', retryable: true } });
+  expect(await (await submit(roomId, original)).json()).toMatchObject({ duplicate: true, acceptedVersion: 2 });
+  await runInDurableObject(stub, (_instance, ctx) => ctx.storage.sql.exec('UPDATE room_limits SET readyAt = 0'));
+  expect((await submit(roomId, pass(2))).status).toBe(200);
+});
+
+it('applies edge IP and verified UID bindings before dispatch and sanitizes logged failures', async () => {
+  const ip = vi.fn(async () => ({ success: false }));
+  const join = vi.fn(async () => ({ success: false }));
+  const roomId = crypto.randomUUID();
+  const request = new Request(local + '/api/rooms', { method: 'POST',
+    headers: { 'cf-connecting-ip': '203.0.113.5', authorization: 'Bearer never-log-token' } }) as Parameters<typeof normalWorker.fetch>[0];
+  const byIp = await normalWorker.fetch(request, { ...bindings, EDGE_ROOM_IP: { limit: ip } });
+  expect(byIp.status).toBe(429);
+  expect(byIp.headers.get('retry-after')).toBe('60');
+  expect(ip).toHaveBeenCalledWith({ key: '203.0.113.5' });
+  const byUid = await route(new Request(local + `/api/rooms/${roomId}/join`, { method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ commandId: crypto.randomUUID(), inviteSecret: 'never-log-invite' }),
+  }), { ...bindings, EDGE_ROOM_JOIN: { limit: join } }, { userId: other, authExpiresAt: Date.now() + 60_000 });
+  expect(byUid.status).toBe(429);
+  expect(join).toHaveBeenCalledWith({ key: await sha256(other) });
+
+  const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+  try {
+    const failure = await normalWorker.fetch(request, { ...bindings, BUILD_SHA: 'never-log-config-value',
+      EDGE_ROOM_IP: { limit: async () => { throw new Error('never-log-provider-error'); } } });
+    expect(failure.status).toBe(503);
+    expect(log).toHaveBeenCalledTimes(1);
+    const entry: unknown = log.mock.calls[0]?.[0];
+    expect(entry).toEqual({ event: 'room_request', requestId: expect.any(String), build: 'local',
+      route: 'create', status: 503, durationMs: expect.any(Number) });
+
+    const denied = await normalWorker.fetch(new Request(local + `/api/rooms/${roomId}/ws?ticket=${'a'.repeat(64)}`, {
+      headers: { upgrade: 'websocket', origin: 'https://never-log-origin.example' },
+    }), bindings);
+    expect(denied.status).toBe(401);
+    expect(log).toHaveBeenCalledTimes(1);
+  } finally {
+    log.mockRestore();
+  }
+});
+
+
+it('fails closed if a public snapshot would exceed the wire budget', async () => {
+  const roomId = crypto.randomUUID();
+  expect((await create(roomId)).ok).toBe(true);
+  const stub = bindings.GAME_ROOMS.getByName(roomId);
+  await runInDurableObject(stub, (_instance, ctx) => {
+    ctx.storage.sql.exec('INSERT INTO events VALUES (1, 0, ?, ?)',
+      JSON.stringify({ type: 'INVITE_ROTATED', userId: 'never-expose'.repeat(7000) }), new Date().toISOString());
+  });
+  const response = await request('/api/rooms/' + roomId, owner);
+  expect(response.status).toBe(500);
+  expect(await response.text()).not.toContain('never-expose');
 });

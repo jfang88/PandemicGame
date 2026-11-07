@@ -1,11 +1,21 @@
 import { apiError, isUuid, MAX_JSON_BYTES, parseCommandEnvelope, parseCreateRoom, parseJoinRoom, parseRotateInvite,
   PROTOCOL_VERSION, type ErrorCode } from '@pandemic/protocol';
+import { sha256 } from './command-hash';
+import type { CreateBudget, RateFailure } from './limits';
 import type { GameRoom } from './game-room';
 import { allowedSocketOrigin } from './realtime-room';
+
+interface EdgeRateLimit {
+  limit(input: { key: string }): Promise<{ success: boolean }>;
+}
 
 export interface Env {
   FIREBASE_PROJECT_ID: string;
   BUILD_SHA?: string;
+  APP_ENV?: string;
+  CREATE_BUDGETS?: DurableObjectNamespace<CreateBudget>;
+  EDGE_ROOM_IP?: EdgeRateLimit;
+  EDGE_ROOM_JOIN?: EdgeRateLimit;
   APP_ORIGINS?: string;
   GAME_ROOMS: DurableObjectNamespace<GameRoom>;
   ASSETS?: Fetcher;
@@ -38,15 +48,34 @@ const messages: Partial<Record<ErrorCode, string>> = {
   STALE_VERSION: 'Refresh the room and choose an action again.',
   COMMAND_ID_REUSED: 'Command ID has already been used for a different request.',
   INTERNAL_ERROR: 'Room request failed.',
+  TEMPORARILY_UNAVAILABLE: 'Room protection is temporarily unavailable.',
+  RATE_LIMITED: 'Too many requests. Wait before trying again.',
 };
 
 function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
 }
 
-function reject(code: ErrorCode, message = messages[code] ?? 'Request failed.', currentVersion?: number): Response {
-  const { body, status } = apiError(code, message, code === 'INTERNAL_ERROR' || code === 'TEMPORARILY_UNAVAILABLE', currentVersion);
-  return json(body, status);
+function reject(code: ErrorCode, message = messages[code] ?? 'Request failed.', currentVersion?: number, retryAfter?: number): Response {
+  const { body, status } = apiError(code, message,
+    code === 'INTERNAL_ERROR' || code === 'TEMPORARILY_UNAVAILABLE' || code === 'RATE_LIMITED', currentVersion);
+  const response = json(body, status);
+  if (code === 'RATE_LIMITED') response.headers.set('retry-after', String(retryAfter ?? 60));
+  return response;
+}
+
+function rejectResult(result: { code: ErrorCode; currentVersion?: number; retryAfter?: number }): Response {
+  return reject(result.code, undefined, result.currentVersion, result.retryAfter);
+}
+
+export async function guardEdgeIp(request: Request, env: Env): Promise<Response | null> {
+  const path = new URL(request.url).pathname;
+  if (request.method !== 'POST' || (path !== '/api/rooms' && !/^\/api\/rooms\/[^/]+\/join$/.test(path))) return null;
+  if (!env.EDGE_ROOM_IP) return env.APP_ENV ? reject('TEMPORARILY_UNAVAILABLE') : null;
+  const ip = request.headers.get('cf-connecting-ip');
+  if (!ip && !env.APP_ENV) return null;
+  const key = ip && /^[0-9a-f:.]{1,45}$/i.test(ip) ? ip : 'unavailable';
+  return (await env.EDGE_ROOM_IP.limit({ key })).success ? null : reject('RATE_LIMITED');
 }
 
 async function readJson(request: Request): Promise<unknown> {
@@ -122,8 +151,12 @@ export async function route(request: Request, env: Env,
     if (create) {
       const body = parseCreateRoom(await readJson(request));
       if (!body.ok) return reject(body.code);
+      if (env.CREATE_BUDGETS) {
+        const blocked: RateFailure | null = await env.CREATE_BUDGETS.getByName(await sha256(userId)).consume(body.value.roomId);
+        if (blocked) return rejectResult(blocked);
+      } else if (env.APP_ENV) return reject('TEMPORARILY_UNAVAILABLE');
       const result = await env.GAME_ROOMS.getByName(body.value.roomId).create(body.value.roomId, userId, displayName);
-      return 'code' in result ? reject(result.code) : json({ protocolVersion: PROTOCOL_VERSION, ...result });
+      return 'code' in result ? rejectResult(result) : json({ protocolVersion: PROTOCOL_VERSION, ...result });
     }
     const roomId = (roomMatch ?? mutation)?.[1];
     if (!isUuid(roomId)) return reject('BAD_REQUEST', 'Invalid room ID.');
@@ -132,28 +165,31 @@ export async function route(request: Request, env: Env,
       const origin = allowedSocketOrigin(request, env);
       if (!origin || !await emptyBody(request)) return reject('BAD_REQUEST');
       const result = await stub.issueSocketTicket(userId, origin, authExpiresAt);
-      return 'code' in result ? reject(result.code) : json(result);
+      return 'code' in result ? rejectResult(result) : json(result);
     }
     if (mutation?.[2] === 'invite') {
       const body = parseRotateInvite(await readJson(request));
       if (!body.ok) return reject(body.code);
       const result = await stub.rotateInvite(userId, body.value.commandId, body.value.expectedVersion);
-      return 'code' in result ? reject(result.code, undefined, result.currentVersion) : json(result);
+      return 'code' in result ? rejectResult(result) : json(result);
     }
     if (mutation?.[2] === 'join') {
       const body = parseJoinRoom(await readJson(request));
       if (!body.ok) return reject(body.code);
+      if (env.EDGE_ROOM_JOIN) {
+        if (!(await env.EDGE_ROOM_JOIN.limit({ key: await sha256(userId) })).success) return reject('RATE_LIMITED');
+      } else if (env.APP_ENV) return reject('TEMPORARILY_UNAVAILABLE');
       const result = await stub.join(userId, body.value.commandId, body.value.inviteSecret, displayName);
-      return 'code' in result ? reject(result.code, undefined, result.currentVersion) : json(result);
+      return 'code' in result ? rejectResult(result) : json(result);
     }
     if (mutation) {
       const body = parseCommandEnvelope(await readJson(request));
       if (!body.ok) return reject(body.code);
       const result = await stub.execute(userId, body.value);
-      return 'code' in result ? reject(result.code, undefined, result.currentVersion) : json(result);
+      return 'code' in result ? rejectResult(result) : json(result);
     }
     const result = await stub.read(userId);
-    return 'code' in result ? reject(result.code) : json(result.snapshot);
+    return 'code' in result ? rejectResult(result) : json(result.snapshot);
   } catch {
     return reject('INTERNAL_ERROR');
   }

@@ -1,6 +1,8 @@
 # T16 — Abuse controls observability and load
 
-Status: not started. Dependencies: T15.
+Status: in review. Dependencies: T15.
+
+See the [abuse controls and load gate report](../evidence/T16.md).
 
 ## Read
 

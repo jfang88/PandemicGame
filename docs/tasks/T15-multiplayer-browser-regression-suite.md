@@ -1,6 +1,6 @@
 # T15 — Multiplayer browser regression suite
 
-Status: in review. Dependencies: T14.
+Status: done. Dependencies: T14.
 
 See the [browser regression gate report](../evidence/T15.md).
 
