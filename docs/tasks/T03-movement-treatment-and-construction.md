@@ -1,6 +1,9 @@
 # T03 — Movement treatment and construction
 
-Status: not started. Dependencies: T02.
+Status: in review. Dependencies: T02.
+
+Implementation: `agent/T03-movement-treatment-construction`. T02 merged with passing CI.
+See [verification evidence](../evidence/T03.md) for coverage and the temporary DRAW boundary.
 
 ## Read
 

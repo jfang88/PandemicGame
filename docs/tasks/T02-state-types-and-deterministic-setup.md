@@ -1,8 +1,8 @@
 # T02 — State types and deterministic setup
 
-Status: in review. Dependencies: T01.
+Status: done. Dependencies: T01.
 
-Implementation: `agent/T02-state-types-and-deterministic-setup`. T01 dependency merged
+Implementation merged in [PR #23](https://github.com/jfang88/PandemicGame/pull/23); final CI passed. T01 dependency merged
 in PR #22 with passing final CI. See [verification evidence](../evidence/T02.md).
 
 ## Read
