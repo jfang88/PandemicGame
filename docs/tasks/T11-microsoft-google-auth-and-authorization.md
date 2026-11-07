@@ -1,6 +1,8 @@
 # T11 — Microsoft Google auth and authorization
 
-Status: not started. Dependencies: T10.
+Status: in review. Dependencies: T10.
+
+See the [authentication gate report and T17 evidence sheet](../evidence/T11.md).
 
 ## Read
 

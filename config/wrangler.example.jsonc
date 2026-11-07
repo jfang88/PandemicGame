@@ -8,7 +8,7 @@
     "directory": "apps/web/dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": ["/api", "/api/*"]
   },
   "durable_objects": {
     "bindings": [{ "name": "GAME_ROOMS", "class_name": "GameRoom" }]
@@ -22,7 +22,7 @@
       },
       "vars": {
         "APP_ENV": "preview",
-        "ALLOWED_ORIGIN": "REPLACE_WITH_PREVIEW_HTTPS_ORIGIN",
+        "APP_ORIGINS": "REPLACE_WITH_PREVIEW_HTTPS_ORIGIN",
         "FIREBASE_PROJECT_ID": "REPLACE_WITH_PREVIEW_FIREBASE_PROJECT_ID"
       }
     },
@@ -33,7 +33,7 @@
       },
       "vars": {
         "APP_ENV": "production",
-        "ALLOWED_ORIGIN": "REPLACE_WITH_PRODUCTION_HTTPS_ORIGIN",
+        "APP_ORIGINS": "REPLACE_WITH_PRODUCTION_HTTPS_ORIGIN",
         "FIREBASE_PROJECT_ID": "REPLACE_WITH_PRODUCTION_FIREBASE_PROJECT_ID"
       }
     }

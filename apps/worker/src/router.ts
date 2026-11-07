@@ -15,6 +15,7 @@ export interface Env {
 export interface RequestIdentity {
   readonly userId: string;
   readonly authExpiresAt: number;
+  readonly displayName?: string;
 }
 
 const messages: Partial<Record<ErrorCode, string>> = {
@@ -76,7 +77,8 @@ async function readJson(request: Request): Promise<unknown> {
   }
 }
 
-export async function route(request: Request, env: Env, identity: RequestIdentity | null = null): Promise<Response> {
+export async function route(request: Request, env: Env,
+  identity: RequestIdentity | { readonly code: 'UNAUTHENTICATED' | 'TOKEN_EXPIRED' } | null = null): Promise<Response> {
   const { pathname } = new URL(request.url);
   if (pathname === '/api/health' && request.method === 'GET') {
     return json({ ok: true, buildSha: env.BUILD_SHA ?? 'local', protocolVersion: PROTOCOL_VERSION });
@@ -95,13 +97,13 @@ export async function route(request: Request, env: Env, identity: RequestIdentit
       if (!isUuid(roomId) || !allowedSocketOrigin(request, env)) return reject('INVALID_TICKET');
       return await env.GAME_ROOMS.getByName(roomId.toLowerCase()).fetch(request);
     }
-    if (!identity) return reject('UNAUTHENTICATED');
-    const { userId, authExpiresAt } = identity;
+    if (!identity || 'code' in identity) return reject(identity?.code ?? 'UNAUTHENTICATED');
+    const { userId, authExpiresAt, displayName } = identity;
     if (authExpiresAt <= Date.now()) return reject('TOKEN_EXPIRED');
     if (create) {
       const body = parseCreateRoom(await readJson(request));
       if (!body.ok) return reject(body.code);
-      const result = await env.GAME_ROOMS.getByName(body.value.roomId).create(body.value.roomId, userId);
+      const result = await env.GAME_ROOMS.getByName(body.value.roomId).create(body.value.roomId, userId, displayName);
       return 'code' in result ? reject(result.code) : json({ protocolVersion: PROTOCOL_VERSION, ...result });
     }
     const roomId = (roomMatch ?? mutation)?.[1];
@@ -122,7 +124,7 @@ export async function route(request: Request, env: Env, identity: RequestIdentit
     if (mutation?.[2] === 'join') {
       const body = parseJoinRoom(await readJson(request));
       if (!body.ok) return reject(body.code);
-      const result = await stub.join(userId, body.value.commandId, body.value.inviteSecret);
+      const result = await stub.join(userId, body.value.commandId, body.value.inviteSecret, displayName);
       return 'code' in result ? reject(result.code, undefined, result.currentVersion) : json(result);
     }
     if (mutation) {

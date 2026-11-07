@@ -25,3 +25,4 @@ jobs:
       - name: Install Chromium for foundation smoke
         run: npx playwright install --with-deps chromium
       - run: npm run test:smoke
+      - run: npm run test:auth-smoke
