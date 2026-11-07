@@ -1,6 +1,6 @@
 # T04 — Sharing cures and discard continuations
 
-Status: in review. Dependencies: T03.
+Status: done. Dependencies: T03.
 
 ## Implementation evidence
 

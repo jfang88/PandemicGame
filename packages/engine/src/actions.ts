@@ -1,4 +1,5 @@
 import { isRecord, loadBoard } from './board';
+import { resolveTurn, type TurnEvent } from './turn';
 import { COLORS, type Color, type Continuation, type GameState, type LocationCardId, type PlayerState } from './types';
 
 export type ActionCommand =
@@ -11,6 +12,7 @@ export type ActionCommand =
 export type ActionError = 'BAD_REQUEST' | 'WRONG_TURN' | 'WRONG_PHASE' | 'GAME_FINISHED' | 'ILLEGAL_ACTION';
 /** Explicit public facts only; never embed state, command objects, decks or RNG. */
 export type ActionEvent =
+  | TurnEvent
   | { readonly type: 'CARD_DISCARDED'; readonly userId: string; readonly cardId: LocationCardId }
   | { readonly type: 'CARD_GIVEN'; readonly userId: string; readonly recipientUserId: string; readonly cardId: LocationCardId }
   | { readonly type: 'CURE_DISCOVERED'; readonly userId: string; readonly color: Color }
@@ -18,8 +20,7 @@ export type ActionEvent =
   | { readonly type: 'CUBES_TREATED'; readonly userId: string; readonly locationId: string; readonly color: Color; readonly count: number }
   | { readonly type: 'CENTER_BUILT'; readonly userId: string; readonly locationId: string }
   | { readonly type: 'ACTION_PASSED'; readonly userId: string }
-  | { readonly type: 'ACTION_SPENT'; readonly userId: string; readonly actionsRemaining: number }
-  | { readonly type: 'PHASE_CHANGED'; readonly phase: 'ACTIONS' | 'DRAW' | 'DISCARD_REQUIRED' | 'WON' };
+  | { readonly type: 'ACTION_SPENT'; readonly userId: string; readonly actionsRemaining: number };
 export type ActionResult =
   | { readonly ok: true; readonly state: GameState; readonly events: readonly ActionEvent[] }
   | { readonly ok: false; readonly state: GameState; readonly events: readonly []; readonly error: ActionError };
@@ -63,8 +64,17 @@ function ownsDistinctCards(player: PlayerState, cards: readonly LocationCardId[]
   return new Set(cards).size === cards.length && cards.every(card => player.hand.includes(card));
 }
 
-/** Pure action boundary. T05 will resolve DRAW automatically before persistence. */
+/** Pure command boundary. Automatic effects finish before a snapshot is returned. */
 export function applyCommand(state: GameState, actorId: string, input: unknown): ActionResult {
+  const action = applyPlayerCommand(state, actorId, input);
+  if (!action.ok || action.state.phase !== 'DRAW') return action;
+  const resume = state.continuation?.resume;
+  const draws = resume?.phase === 'DRAW' ? resume.drawsRemaining : 2;
+  const turn = resolveTurn(action.state, draws);
+  return { ok: true, state: turn.state, events: [...action.events, ...turn.events] };
+}
+
+function applyPlayerCommand(state: GameState, actorId: string, input: unknown): ActionResult {
   const reject = (error: ActionError): ActionResult => ({ ok: false, error, state, events: [] });
   if (state.phase === 'WON' || state.phase === 'LOST') return reject('GAME_FINISHED');
   if (state.phase === 'DISCARD_REQUIRED') {

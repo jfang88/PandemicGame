@@ -24,7 +24,7 @@ function cubes(state: GameState): GameState {
   return { ...state, cubes: { ...state.cubes, A01: { ...current, blue: 3, red: 2 } },
     supply: { ...state.supply, blue: state.supply.blue + current.blue - 3, red: state.supply.red + current.red - 2 } };
 }
-function accept(state: GameState, command: ActionCommand) {
+function accept(state: GameState, command: ActionCommand, resolvesTurn = false) {
   assertGameInvariants(state);
   const input = freeze(state); const before = JSON.stringify(input);
   const result = applyCommand(input, 'actor', freeze(command));
@@ -32,8 +32,10 @@ function accept(state: GameState, command: ActionCommand) {
   if (!result.ok) throw new Error(result.error);
   expect(JSON.stringify(input)).toBe(before);
   expect(result.state).not.toBe(input);
-  expect(result.state.actionsRemaining).toBe(state.actionsRemaining - 1);
-  expect(result.state.rngState).toBe(state.rngState);
+  if (!resolvesTurn) {
+    expect(result.state.actionsRemaining).toBe(state.actionsRemaining - 1);
+    expect(result.state.rngState).toBe(state.rngState);
+  }
   expect(result).toEqual(applyCommand(input, 'actor', command));
   assertGameInvariants(result.state);
   return result;
@@ -106,12 +108,20 @@ describe('E09/E12 card sharing and continuations', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(result.error);
     expect(result).toEqual(applyCommand(paused, 'other', command));
-    expect(result.state).toEqual({ ...paused, phase: resume.phase, continuation: null,
-      players: [paused.players[0], state.players[1]], playerDiscard: ['p:A01'] });
-    expect(result.events).toEqual([
+    expect(result.state.players[1]).toEqual(state.players[1]);
+    expect(result.state.playerDiscard).toEqual(['p:A01']);
+    expect(result.state.continuation).toBeNull();
+    expect(result.events.slice(0, 2)).toEqual([
       { type: 'CARD_DISCARDED', userId: 'other', cardId: 'p:A01' },
       { type: 'PHASE_CHANGED', phase: resume.phase },
     ]);
+    if (actions === 1) {
+      expect(result.state).toMatchObject({ phase: 'ACTIONS', activeSeat: 3, actionsRemaining: 4 });
+      expect(result.state.playerDeck).toEqual(paused.playerDeck.slice(2));
+    } else {
+      expect(result.state).toEqual({ ...paused, phase: 'ACTIONS', continuation: null,
+        players: [paused.players[0], state.players[1]], playerDiscard: ['p:A01'] });
+    }
     assertGameInvariants(result.state);
   });
 });
@@ -269,26 +279,25 @@ describe('E08 construction', () => {
   });
 });
 
-describe('E23 validation and T03 turn boundary', () => {
+describe('E23 validation and fourth-action boundary', () => {
   it('PASS spends one action only', () => {
     const state = fixture(); const result = accept(state, { type: 'PASS', payload: {} });
     expect(result.state).toEqual({ ...state, actionsRemaining: 3 });
     expect(result.events).toEqual([{ type: 'ACTION_PASSED', userId: 'actor' }, { type: 'ACTION_SPENT', userId: 'actor', actionsRemaining: 3 }]);
   });
-  it.each(['MOVE','DIRECT_FLIGHT','CHARTER_FLIGHT','SHUTTLE','TREAT','BUILD_CENTER','PASS'] as const)('fourth %s reaches DRAW without premature automatic processing', type => {
+  it.each(['MOVE','DIRECT_FLIGHT','CHARTER_FLIGHT','SHUTTLE','TREAT','BUILD_CENTER','PASS'] as const)('fourth %s resolves the turn', type => {
     let state = { ...cubes(fixture('builder', ['p:A01','p:A02'])), actionsRemaining: 1 };
     if (type === 'SHUTTLE') state = { ...state, centers: ['A01','A02'] };
     if (type === 'BUILD_CENTER') state = at(state, 'B01');
     const command: ActionCommand = type === 'TREAT' ? { type, payload: { color: 'blue' } }
       : type === 'PASS' || type === 'BUILD_CENTER' ? { type, payload: {} }
       : { type, payload: { destination: 'A02' } };
-    const result = accept(state, command);
-    expect(result.state.phase).toBe('DRAW');
-    expect(result.state.activeSeat).toBe(1);
-    expect(result.state.playerDeck).toEqual(state.playerDeck);
-    expect(result.state.infectionDeck).toEqual(state.infectionDeck);
-    expect(result.events.slice(-2)).toEqual([{ type: 'ACTION_SPENT', userId: 'actor', actionsRemaining: 0 }, { type: 'PHASE_CHANGED', phase: 'DRAW' }]);
-    reject(result.state, { type: 'PASS', payload: {} }, 'WRONG_PHASE');
+    const result = accept(state, command, true);
+    expect(result.state).toMatchObject({ phase: 'ACTIONS', activeSeat: 3, actionsRemaining: 4 });
+    expect(result.state.playerDeck).toEqual(state.playerDeck.slice(2));
+    expect(result.events).toContainEqual({ type: 'ACTION_SPENT', userId: 'actor', actionsRemaining: 0 });
+    expect(result.events).toContainEqual({ type: 'PHASE_CHANGED', phase: 'DRAW' });
+    reject(result.state, { type: 'PASS', payload: {} }, 'WRONG_TURN');
   });
   it.each(['other','unknown'])('rejects wrong actor %s', actor => reject(fixture(), move('A02'), 'WRONG_TURN', actor));
   it.each(['DRAW','INFECTION','DISCARD_REQUIRED','WON','LOST'] as const)('rejects phase %s', phase => {

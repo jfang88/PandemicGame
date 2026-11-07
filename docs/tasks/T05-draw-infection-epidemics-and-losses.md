@@ -1,6 +1,15 @@
 # T05 — Draw infection epidemics and losses
 
-Status: not started. Dependencies: T04.
+Status: in review. Dependencies: T04.
+
+## Implementation evidence
+
+- E11 covers sequential draws, rate-based infection and rotation across occupied seats.
+- E13 covers both over-limit draw pauses and exact resumption with one or zero remaining draws. E12 remains covered for a fourth-action transfer and E21 for immediate victory.
+- E14–E17 use independent expected outcomes for consecutive epidemics, bottom draws, intensification, cyclic traversal and per-card outbreak tracking.
+- E18–E20 cover each loss, first-failure ordering and card conservation. E22 covers infection of a cured color at the Medic's location.
+
+The engine returns a completed turn, a pending discard or a terminal outcome. A missing infection deck and discard raises an invariant error without mutating the command input. An independent source review found no blocking rules defects. T06 owns the randomized engine gate.
 
 ## Read
 
