@@ -27,7 +27,7 @@ async function verifyConfiguredBuild() {
     const files = (Array.isArray(result) ? result : [result]).flatMap(item => item.output);
     const output = files.map(file => file.type === 'chunk' ? file.code : String(file.source)).join('\n');
     assert.match(output, /microsoft\.com/);
-    assert.doesNotMatch(output, /firebase-local-popup-fixture|mock-refreshed-token|x-pandemic-test-uid|FIREBASE_AUTH_EMULATOR_HOST|PandemicGame local test|BEGIN PRIVATE KEY|local\.html|local-fixture|\brngState\b|\bplayerDeck\b/);
+    assert.doesNotMatch(output, /firebase-local-popup-fixture|mock-refreshed-token|x-pandemic-test-uid|gameTestSocket|__test\/rooms|FIREBASE_AUTH_EMULATOR_HOST|PandemicGame local test|BEGIN PRIVATE KEY|local\.html|local-fixture|\brngState\b|\bplayerDeck\b/);
     console.log('PASS: configured production auth build excludes local identities, fixtures and emulator settings');
   } finally {
     for (const [key, value] of previous) {

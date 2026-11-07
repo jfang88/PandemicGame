@@ -257,8 +257,12 @@ export class GameRoom extends RealtimeRoom {
 
   async execute(userId: string, command: CommandEnvelope): Promise<CommandAcceptance | CommandReceipt | Failure> {
     const hash = await commandHash(command);
-    const seed = command.type === 'START_GAME' ? gameSeed() : undefined;
+    const seed = command.type === 'START_GAME' ? this.initialGameSeed() : undefined;
     return this.commit(() => this.executeTransaction(userId, command, hash, seed));
+  }
+
+  protected initialGameSeed(): number {
+    return gameSeed();
   }
 
   private receipt(userId: string, commandId: string): Receipt | undefined {

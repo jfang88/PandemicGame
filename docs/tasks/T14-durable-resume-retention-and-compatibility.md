@@ -1,6 +1,6 @@
 # T14 — Durable resume retention and compatibility
 
-Status: in review. Dependencies: T13.
+Status: done. Dependencies: T13.
 
 See the [retention and compatibility gate report](../evidence/T14.md).
 

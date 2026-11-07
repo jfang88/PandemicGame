@@ -407,3 +407,12 @@ it('leaves the exact future-rules game intact when the retention alarm is due', 
   expect((await submit(roomId, pass(1))).status).toBe(503);
   expect(await runInDurableObject(stub, (_instance, ctx) => ctx.storage.getAlarm())).toBeNull();
 });
+
+it('keeps the browser fixture endpoint out of the normal Worker', async () => {
+  const path = '/__test/rooms/' + crypto.randomUUID() + '/fixture';
+  const response = await normalWorker.fetch(new Request(local + path, { method: 'POST',
+    headers: { [identityHeader]: owner, 'content-type': 'application/json' },
+    body: JSON.stringify({ scenario: 'win' }),
+  }), { GAME_ROOMS: bindings.GAME_ROOMS, FIREBASE_PROJECT_ID: bindings.FIREBASE_PROJECT_ID });
+  await error(response, 404, 'ROOM_NOT_FOUND');
+});
