@@ -1,12 +1,13 @@
 import { DurableObject } from 'cloudflare:workers';
-import { applyCommand, assertGameInvariants, BOARD_VERSION, RULES_VERSION, type ActionEvent, type GameState } from '@pandemic/engine';
-import { projectRoom, PROTOCOL_VERSION, type CommandAcceptance, type CommandEnvelope, type ErrorCode,
-  type PublicRoomSnapshot, type RoomMember } from '@pandemic/protocol';
-import { commandHash } from './command-hash';
+import { applyCommand, assertGameInvariants, BOARD_VERSION, RULES_VERSION, type GameState } from '@pandemic/engine';
+import { projectRoom, PROTOCOL_VERSION, type CommandAcceptance, type CommandEnvelope, type CommandReceipt,
+  type ErrorCode, type InviteAcceptance, type PublicRoomSnapshot, type RoomEventData, type RoomMember } from '@pandemic/protocol';
+import { commandHash, requestHash, sha256 } from './command-hash';
+import { applyLobbyCommand, gameSeed, isLobbyCommand } from './lobby';
 import type { Env } from './router';
 
 const SCHEMA_VERSION = 1;
-const STORAGE_VERSION = 2;
+const STORAGE_VERSION = 3;
 const DAY_MS = 86_400_000;
 type RoomRow = {
   roomId: string;
@@ -16,6 +17,7 @@ type RoomRow = {
   revision: number;
   lifecycle: 'LOBBY' | 'RUNNING' | 'WON' | 'LOST' | 'EXPIRED';
   ownerUserId: string;
+  inviteHash: string | null;
   gameJson: string | null;
 };
 
@@ -23,9 +25,24 @@ type ReadResult = { readonly snapshot: PublicRoomSnapshot }
   | { readonly code: 'ROOM_NOT_FOUND' | 'ROOM_EXPIRED' | 'NOT_MEMBER' | 'ROOM_INCOMPATIBLE' };
 type CreateResult = { readonly roomId: string; readonly version: number }
   | { readonly code: 'ROOM_CONFLICT' | 'ROOM_EXPIRED' | 'ROOM_INCOMPATIBLE' };
-type Receipt = { requestHash: string; acceptedRevision: number };
+export type ReceiptKind = 'command' | 'leave' | 'invite' | 'join';
+type Receipt = { requestHash: string; acceptedRevision: number; kind: ReceiptKind; privateResult: string | null };
 type EventRow = { revision: number; eventIndex: number; timestamp: string; eventJson: string };
-type CommandResult = CommandAcceptance | { readonly code: ErrorCode; readonly currentVersion?: number };
+type Failure = { readonly code: ErrorCode; readonly currentVersion?: number };
+type Mutation<T> = Failure | { response: T; publish?: PublicRoomSnapshot };
+
+function acceptance(commandId: string, acceptedVersion: number, duplicate: boolean): CommandReceipt {
+  return { protocolVersion: PROTOCOL_VERSION, commandId, acceptedVersion, duplicate };
+}
+
+function inviteMatches(expected: string | null, actual: string): boolean {
+  if (!expected || expected.length !== actual.length) return false;
+  let different = 0;
+  for (let index = 0; index < actual.length; index++) {
+    different |= expected.charCodeAt(index) ^ actual.charCodeAt(index);
+  }
+  return different === 0;
+}
 
 export class GameRoom extends DurableObject<Env> {
   private compatible = false;
@@ -38,7 +55,7 @@ export class GameRoom extends DurableObject<Env> {
         sql.exec('CREATE TABLE IF NOT EXISTS metadata (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), version INTEGER NOT NULL)');
         const metadata = sql.exec<{ version: number }>('SELECT version FROM metadata WHERE singleton = 1').toArray()[0];
         if (metadata?.version === STORAGE_VERSION) return true;
-        if (metadata && metadata.version !== 1) return false;
+        if (metadata && metadata.version !== 1 && metadata.version !== 2) return false;
         if (!metadata) {
           sql.exec(`CREATE TABLE room (
             singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
@@ -54,15 +71,19 @@ export class GameRoom extends DurableObject<Env> {
             ready INTEGER NOT NULL CHECK (ready IN (0, 1)), joinedAt TEXT NOT NULL
           )`);
         }
-        sql.exec(`CREATE TABLE commands (
-          userId TEXT NOT NULL, commandId TEXT NOT NULL, requestHash TEXT NOT NULL,
-          acceptedRevision INTEGER NOT NULL CHECK (acceptedRevision > 0),
-          PRIMARY KEY (userId, commandId)
-        )`);
-        sql.exec(`CREATE TABLE events (
-          revision INTEGER NOT NULL CHECK (revision > 0), eventIndex INTEGER NOT NULL CHECK (eventIndex >= 0),
-          eventJson TEXT NOT NULL, timestamp TEXT NOT NULL, PRIMARY KEY (revision, eventIndex)
-        )`);
+        if (metadata?.version !== 2) {
+          sql.exec(`CREATE TABLE commands (
+            userId TEXT NOT NULL, commandId TEXT NOT NULL, requestHash TEXT NOT NULL,
+            acceptedRevision INTEGER NOT NULL CHECK (acceptedRevision > 0),
+            PRIMARY KEY (userId, commandId)
+          )`);
+          sql.exec(`CREATE TABLE events (
+            revision INTEGER NOT NULL CHECK (revision > 0), eventIndex INTEGER NOT NULL CHECK (eventIndex >= 0),
+            eventJson TEXT NOT NULL, timestamp TEXT NOT NULL, PRIMARY KEY (revision, eventIndex)
+          )`);
+        }
+        sql.exec("ALTER TABLE commands ADD COLUMN kind TEXT NOT NULL DEFAULT 'command' CHECK (kind IN ('command','leave','invite','join'))");
+        sql.exec('ALTER TABLE commands ADD COLUMN privateResult TEXT');
         sql.exec(`INSERT INTO metadata (singleton, version) VALUES (1, ?)
           ON CONFLICT (singleton) DO UPDATE SET version = excluded.version`, STORAGE_VERSION);
         return true;
@@ -72,7 +93,7 @@ export class GameRoom extends DurableObject<Env> {
 
   private room(): RoomRow | undefined {
     return this.ctx.storage.sql.exec<RoomRow>(`SELECT roomId, schemaVersion, rulesVersion, boardVersion,
-      revision, lifecycle, ownerUserId, gameJson FROM room WHERE singleton = 1`).toArray()[0];
+      revision, lifecycle, ownerUserId, inviteHash, gameJson FROM room WHERE singleton = 1`).toArray()[0];
   }
 
   private supports(room: Pick<RoomRow, 'schemaVersion' | 'rulesVersion' | 'boardVersion'>): boolean {
@@ -136,81 +157,200 @@ export class GameRoom extends DurableObject<Env> {
   private snapshot(room: RoomRow, game: GameState | null): PublicRoomSnapshot {
     const recentEvents = this.ctx.storage.sql.exec<EventRow>(
       'SELECT revision, eventIndex, timestamp, eventJson FROM events ORDER BY revision DESC, eventIndex DESC LIMIT 30',
-    ).toArray().reverse().map(({ eventJson, ...metadata }) => ({ ...metadata, event: JSON.parse(eventJson) as ActionEvent }));
+    ).toArray().reverse().map(({ eventJson, ...metadata }) => ({ ...metadata, event: JSON.parse(eventJson) as RoomEventData }));
     return projectRoom({ roomId: room.roomId, schemaVersion: SCHEMA_VERSION,
       rulesVersion: RULES_VERSION, boardVersion: BOARD_VERSION, revision: room.revision,
       lifecycle: room.lifecycle, ownerUserId: room.ownerUserId, members: this.members(), game, recentEvents });
   }
 
-  async execute(userId: string, command: CommandEnvelope): Promise<CommandResult> {
+  private async commit<T>(mutate: () => Mutation<T>): Promise<T | Failure> {
     try {
-      // The asynchronous hash completes before any authoritative read.
-      const requestHash = await commandHash(command);
-      const result = this.ctx.storage.transactionSync(() => this.executeTransaction(userId, command, requestHash));
-      if (!('code' in result)) {
-        await this.ctx.storage.sync();
-        if (!result.duplicate) await this.commandCommitted(result.snapshot);
-      }
-      return result;
+      const result = this.ctx.storage.transactionSync(mutate);
+      if ('code' in result) return result;
+      await this.ctx.storage.sync();
+      if (result.publish) await this.commandCommitted(result.publish);
+      return result.response;
     } catch {
       // A delivery error may occur after commit. The client retries with the same ID.
       return { code: 'INTERNAL_ERROR' };
     }
   }
 
-  private executeTransaction(userId: string, command: CommandEnvelope, requestHash: string): CommandResult {
+  async execute(userId: string, command: CommandEnvelope): Promise<CommandAcceptance | CommandReceipt | Failure> {
+    const hash = await commandHash(command);
+    const seed = command.type === 'START_GAME' ? gameSeed() : undefined;
+    return this.commit(() => this.executeTransaction(userId, command, hash, seed));
+  }
+
+  private receipt(userId: string, commandId: string): Receipt | undefined {
+    return this.ctx.storage.sql.exec<Receipt>(
+      'SELECT requestHash, acceptedRevision, kind, privateResult FROM commands WHERE userId = ? AND commandId = ?',
+      userId, commandId,
+    ).toArray()[0];
+  }
+
+  private executeTransaction(userId: string, command: CommandEnvelope, hash: string,
+    seed: number | undefined): Mutation<CommandAcceptance | CommandReceipt> {
     if (!this.compatible) return { code: this.mayReportIncompatibility(userId) ? 'ROOM_INCOMPATIBLE' : 'NOT_MEMBER' };
     const room = this.room();
     if (!room) return { code: 'ROOM_NOT_FOUND' };
-    if (!this.hasMember(userId)) return { code: 'NOT_MEMBER' };
+    const { commandId, expectedVersion, type, payload } = command;
+    if (!this.hasMember(userId)) {
+      if (type === 'LEAVE_LOBBY' && this.supports(room)) {
+        const leave = this.receipt(userId, commandId);
+        if (leave?.kind === 'leave' && leave.requestHash === hash) {
+          return { response: acceptance(commandId, leave.acceptedRevision, true) };
+        }
+      }
+      return { code: 'NOT_MEMBER' };
+    }
     if (!this.supports(room)) return { code: 'ROOM_INCOMPATIBLE' };
     if (room.lifecycle === 'EXPIRED') return { code: 'ROOM_EXPIRED' };
     const game = this.loadGame(room);
     if (game && !this.supports(game)) return { code: 'ROOM_INCOMPATIBLE' };
 
-    const { commandId, expectedVersion, type, payload } = command;
     const sql = this.ctx.storage.sql;
-    const receipt = sql.exec<Receipt>(
-      'SELECT requestHash, acceptedRevision FROM commands WHERE userId = ? AND commandId = ?', userId, commandId,
-    ).toArray()[0];
+    const receipt = this.receipt(userId, commandId);
     if (receipt) {
-      if (receipt.requestHash !== requestHash) return { code: 'COMMAND_ID_REUSED' };
-      return { protocolVersion: PROTOCOL_VERSION, commandId, acceptedVersion: receipt.acceptedRevision,
-        duplicate: true, snapshot: this.snapshot(room, game) };
+      if (receipt.kind !== (type === 'LEAVE_LOBBY' ? 'leave' : 'command') || receipt.requestHash !== hash) {
+        return { code: 'COMMAND_ID_REUSED' };
+      }
+      const recorded = acceptance(commandId, receipt.acceptedRevision, true);
+      return { response: receipt.kind === 'leave' ? recorded : { ...recorded, snapshot: this.snapshot(room, game) } };
     }
     if (expectedVersion !== room.revision) return { code: 'STALE_VERSION', currentVersion: room.revision };
-    if (!game || type === 'SELECT_ROLE' || type === 'SET_READY' || type === 'LEAVE_LOBBY' || type === 'START_GAME') {
-      return { code: 'WRONG_PHASE' };
+    const now = Date.now();
+    const timestamp = new Date(now).toISOString();
+    const revision = room.revision + 1;
+    if (isLobbyCommand(command)) {
+      if (room.lifecycle !== 'LOBBY') return { code: 'ROOM_STARTED' };
+      const mutation = applyLobbyCommand(sql, this.members(), room.ownerUserId, userId, command, seed);
+      if ('code' in mutation) return mutation;
+      const ownerUserId = mutation.ownerUserId ?? room.ownerUserId;
+      const lifecycle = mutation.game ? this.writeGame(mutation.game, revision, now)
+        : this.writeLobby(room, revision, now, ownerUserId, mutation.abandoned);
+      if (mutation.abandoned) sql.exec("UPDATE commands SET privateResult = NULL WHERE kind = 'invite'");
+      this.recordEvents([mutation.event], revision, timestamp);
+      const leave = type === 'LEAVE_LOBBY';
+      this.recordReceipt(userId, commandId, hash, revision, leave ? 'leave' : 'command');
+      const recorded = acceptance(commandId, revision, false);
+      const snapshot = this.snapshot({ ...room, revision, lifecycle, ownerUserId }, mutation.game ?? null);
+      return { response: leave ? recorded : { ...recorded, snapshot }, publish: snapshot };
     }
+    if (!game) return { code: 'WRONG_PHASE' };
     const transition = applyCommand(game, userId, { type, payload });
     if (!transition.ok) return { code: transition.error };
 
     assertGameInvariants(transition.state);
-    const now = Date.now();
-    const timestamp = new Date(now).toISOString();
-    const revision = room.revision + 1;
     const lifecycle = this.writeGame(transition.state, revision, now);
     this.recordEvents(transition.events, revision, timestamp);
-    this.recordReceipt(userId, commandId, requestHash, revision);
-    return { protocolVersion: PROTOCOL_VERSION, commandId, acceptedVersion: revision, duplicate: false,
-      snapshot: this.snapshot({ ...room, revision, lifecycle }, transition.state) };
+    this.recordReceipt(userId, commandId, hash, revision);
+    const snapshot = this.snapshot({ ...room, revision, lifecycle }, transition.state);
+    return { response: { ...acceptance(commandId, revision, false), snapshot }, publish: snapshot };
   }
 
-  protected recordEvents(events: readonly ActionEvent[], revision: number, timestamp: string): void {
+  async rotateInvite(userId: string, commandId: string, expectedVersion: number): Promise<InviteAcceptance | Failure> {
+    const inviteSecret = Array.from(crypto.getRandomValues(new Uint8Array(16)),
+      byte => byte.toString(16).padStart(2, '0')).join('');
+    const [hash, inviteHash] = await Promise.all([
+      requestHash({ type: 'ROTATE_INVITE', protocolVersion: PROTOCOL_VERSION, expectedVersion }),
+      sha256(inviteSecret),
+    ]);
+    return this.commit(() => {
+      if (!this.compatible) return { code: this.mayReportIncompatibility(userId) ? 'ROOM_INCOMPATIBLE' : 'NOT_MEMBER' };
+      const room = this.room();
+      if (!room) return { code: 'ROOM_NOT_FOUND' };
+      if (!this.hasMember(userId)) return { code: 'NOT_MEMBER' };
+      if (!this.supports(room)) return { code: 'ROOM_INCOMPATIBLE' };
+      if (room.lifecycle === 'EXPIRED') return { code: 'ROOM_EXPIRED' };
+      if (room.ownerUserId !== userId) return { code: 'NOT_OWNER' };
+      const receipt = this.receipt(userId, commandId);
+      if (receipt) {
+        if (receipt.kind !== 'invite' || receipt.requestHash !== hash) return { code: 'COMMAND_ID_REUSED' };
+        if (!receipt.privateResult) return { code: 'INTERNAL_ERROR' };
+        return { response: { ...acceptance(commandId, receipt.acceptedRevision, true), inviteSecret: receipt.privateResult } };
+      }
+      if (expectedVersion !== room.revision) return { code: 'STALE_VERSION', currentVersion: room.revision };
+      if (room.lifecycle !== 'LOBBY') return { code: 'ROOM_STARTED' };
+      const now = Date.now();
+      const revision = room.revision + 1;
+      this.writeLobby(room, revision, now, room.ownerUserId, false, inviteHash);
+      this.recordEvents([{ type: 'INVITE_ROTATED', userId }], revision, new Date(now).toISOString());
+      this.recordReceipt(userId, commandId, hash, revision, 'invite', inviteSecret);
+      return { response: { ...acceptance(commandId, revision, false), inviteSecret },
+        publish: this.snapshot({ ...room, revision }, null) };
+    });
+  }
+
+  async join(userId: string, commandId: string, inviteSecret: string): Promise<CommandAcceptance | Failure> {
+    const [hash, inviteHash] = await Promise.all([
+      requestHash({ type: 'JOIN_ROOM', protocolVersion: PROTOCOL_VERSION, inviteSecret }),
+      sha256(inviteSecret),
+    ]);
+    return this.commit(() => {
+      if (!this.compatible) return { code: this.mayReportIncompatibility(userId) ? 'ROOM_INCOMPATIBLE' : 'INVALID_INVITE' };
+      const room = this.room();
+      if (!room) return { code: 'ROOM_NOT_FOUND' };
+      const isMember = this.hasMember(userId);
+      if (!this.supports(room)) return { code: isMember ? 'ROOM_INCOMPATIBLE' : 'INVALID_INVITE' };
+      if (room.lifecycle === 'EXPIRED') return { code: 'ROOM_EXPIRED' };
+      const receipt = this.receipt(userId, commandId);
+      if (receipt) {
+        if (!isMember) return { code: 'NOT_MEMBER' };
+        if (receipt.kind !== 'join' || receipt.requestHash !== hash) return { code: 'COMMAND_ID_REUSED' };
+        const game = this.loadGame(room);
+        if (game && !this.supports(game)) return { code: 'ROOM_INCOMPATIBLE' };
+        return { response: { ...acceptance(commandId, receipt.acceptedRevision, true), snapshot: this.snapshot(room, game) } };
+      }
+      if (!inviteMatches(room.inviteHash, inviteHash)) return { code: 'INVALID_INVITE' };
+      if (room.lifecycle !== 'LOBBY') return { code: 'ROOM_STARTED' };
+      if (isMember) {
+        this.recordReceipt(userId, commandId, hash, room.revision, 'join');
+        return { response: { ...acceptance(commandId, room.revision, false), snapshot: this.snapshot(room, null) } };
+      }
+      const members = this.members();
+      const seat = [0, 1, 2, 3].find(candidate => !members.some(member => member.seat === candidate));
+      if (seat === undefined) return { code: 'ROOM_FULL' };
+      const now = Date.now();
+      const timestamp = new Date(now).toISOString();
+      const revision = room.revision + 1;
+      const sql = this.ctx.storage.sql;
+      sql.exec(`INSERT INTO members (userId, seat, displayName, role, ready, joinedAt)
+        VALUES (?, ?, 'Player', NULL, 0, ?)`, userId, seat, timestamp);
+      sql.exec('UPDATE members SET ready = 0');
+      this.writeLobby(room, revision, now, room.ownerUserId);
+      this.recordEvents([{ type: 'MEMBER_JOINED', userId }], revision, timestamp);
+      this.recordReceipt(userId, commandId, hash, revision, 'join');
+      const snapshot = this.snapshot({ ...room, revision }, null);
+      return { response: { ...acceptance(commandId, revision, false), snapshot }, publish: snapshot };
+    });
+  }
+
+  protected recordEvents(events: readonly RoomEventData[], revision: number, timestamp: string): void {
     events.forEach((event, eventIndex) => this.ctx.storage.sql.exec(
       'INSERT INTO events (revision, eventIndex, eventJson, timestamp) VALUES (?, ?, ?, ?)',
       revision, eventIndex, JSON.stringify(event), timestamp,
     ));
   }
 
-  protected recordReceipt(userId: string, commandId: string, requestHash: string, revision: number): void {
-    this.ctx.storage.sql.exec('INSERT INTO commands (userId, commandId, requestHash, acceptedRevision) VALUES (?, ?, ?, ?)',
-      userId, commandId, requestHash, revision);
+  protected recordReceipt(userId: string, commandId: string, requestHash: string, revision: number,
+    kind: ReceiptKind = 'command', privateResult: string | null = null): void {
+    this.ctx.storage.sql.exec(`INSERT INTO commands (userId, commandId, requestHash, acceptedRevision, kind, privateResult)
+      VALUES (?, ?, ?, ?, ?, ?)`, userId, commandId, requestHash, revision, kind, privateResult);
   }
 
   protected commandCommitted(snapshot: PublicRoomSnapshot): void | Promise<void> {
     // T10 will deliver the committed public snapshot to connected room members.
     void snapshot;
+  }
+
+  private writeLobby(room: RoomRow, revision: number, now: number, ownerUserId: string,
+    abandoned = false, inviteHash = room.inviteHash): RoomRow['lifecycle'] {
+    const lifecycle = abandoned ? 'EXPIRED' : 'LOBBY';
+    this.ctx.storage.sql.exec(`UPDATE room SET ownerUserId = ?, lifecycle = ?, inviteHash = ?, revision = ?,
+      lastMutationAt = ?, expiresAt = ? WHERE singleton = 1`, ownerUserId, lifecycle, abandoned ? null : inviteHash,
+    revision, new Date(now).toISOString(), new Date(now + (abandoned ? 0 : 7 * DAY_MS)).toISOString());
+    return lifecycle;
   }
 
   private writeGame(game: GameState, revision: number, now: number): RoomRow['lifecycle'] {

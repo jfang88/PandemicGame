@@ -1,4 +1,5 @@
-import { apiError, isUuid, MAX_JSON_BYTES, parseCommandEnvelope, parseCreateRoom, PROTOCOL_VERSION, type ErrorCode } from '@pandemic/protocol';
+import { apiError, isUuid, MAX_JSON_BYTES, parseCommandEnvelope, parseCreateRoom, parseJoinRoom, parseRotateInvite,
+  PROTOCOL_VERSION, type ErrorCode } from '@pandemic/protocol';
 import type { GameRoom } from './game-room';
 
 export interface Env {
@@ -12,9 +13,15 @@ const messages: Partial<Record<ErrorCode, string>> = {
   BAD_REQUEST: 'Send a valid JSON request.',
   UNAUTHENTICATED: 'Authentication required.',
   NOT_MEMBER: 'Room access denied.',
+  NOT_OWNER: 'Only the room owner can do that.',
+  INVALID_INVITE: 'The invite is invalid.',
   ROOM_NOT_FOUND: 'Room not found.',
   ROOM_EXPIRED: 'Room expired.',
   ROOM_CONFLICT: 'Room ID is unavailable.',
+  ROOM_FULL: 'The room is full.',
+  ROOM_STARTED: 'The game has already started.',
+  ROLE_TAKEN: 'That role is already selected.',
+  NOT_READY: 'Players must select roles and be ready before starting.',
   ROOM_INCOMPATIBLE: 'Room data version is unsupported.',
   PROTOCOL_UNSUPPORTED: 'Command protocol version is unsupported.',
   STALE_VERSION: 'Refresh the room and choose an action again.',
@@ -69,8 +76,8 @@ export async function route(request: Request, env: Env, userId: string | null = 
   }
   const create = pathname === '/api/rooms' && request.method === 'POST';
   const roomMatch = request.method === 'GET' ? /^\/api\/rooms\/([^/]+)$/.exec(pathname) : null;
-  const commandMatch = request.method === 'POST' ? /^\/api\/rooms\/([^/]+)\/commands$/.exec(pathname) : null;
-  if (!create && !roomMatch && !commandMatch) return reject('ROOM_NOT_FOUND', 'Route not found.');
+  const mutation = request.method === 'POST' ? /^\/api\/rooms\/([^/]+)\/(commands|invite|join)$/.exec(pathname) : null;
+  if (!create && !roomMatch && !mutation) return reject('ROOM_NOT_FOUND', 'Route not found.');
   if (!userId) return reject('UNAUTHENTICATED');
   try {
     if (create) {
@@ -79,10 +86,22 @@ export async function route(request: Request, env: Env, userId: string | null = 
       const result = await env.GAME_ROOMS.getByName(body.value.roomId).create(body.value.roomId, userId);
       return 'code' in result ? reject(result.code) : json({ protocolVersion: PROTOCOL_VERSION, ...result });
     }
-    const roomId = (roomMatch ?? commandMatch)?.[1];
+    const roomId = (roomMatch ?? mutation)?.[1];
     if (!isUuid(roomId)) return reject('BAD_REQUEST', 'Invalid room ID.');
     const stub = env.GAME_ROOMS.getByName(roomId.toLowerCase());
-    if (commandMatch) {
+    if (mutation?.[2] === 'invite') {
+      const body = parseRotateInvite(await readJson(request));
+      if (!body.ok) return reject(body.code);
+      const result = await stub.rotateInvite(userId, body.value.commandId, body.value.expectedVersion);
+      return 'code' in result ? reject(result.code, undefined, result.currentVersion) : json(result);
+    }
+    if (mutation?.[2] === 'join') {
+      const body = parseJoinRoom(await readJson(request));
+      if (!body.ok) return reject(body.code);
+      const result = await stub.join(userId, body.value.commandId, body.value.inviteSecret);
+      return 'code' in result ? reject(result.code, undefined, result.currentVersion) : json(result);
+    }
+    if (mutation) {
       const body = parseCommandEnvelope(await readJson(request));
       if (!body.ok) return reject(body.code);
       const result = await stub.execute(userId, body.value);

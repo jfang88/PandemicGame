@@ -273,6 +273,28 @@ it('migrates a T07 v1 database without rebuilding the room or its decks', async 
   expect((await submit(roomId, pass(1))).status).toBe(200);
 });
 
+it('migrates T08 v2 receipts and still deduplicates the original command', async () => {
+  const { roomId, stub } = await roomWithGame(newGame());
+  const command = pass(1);
+  expect((await submit(roomId, command)).status).toBe(200);
+  await runInDurableObject(stub, (_instance, ctx) => ctx.storage.transactionSync(() => {
+    ctx.storage.sql.exec(`CREATE TABLE commands_v2 (
+      userId TEXT NOT NULL, commandId TEXT NOT NULL, requestHash TEXT NOT NULL,
+      acceptedRevision INTEGER NOT NULL CHECK (acceptedRevision > 0), PRIMARY KEY (userId, commandId)
+    )`);
+    ctx.storage.sql.exec('INSERT INTO commands_v2 SELECT userId, commandId, requestHash, acceptedRevision FROM commands');
+    ctx.storage.sql.exec('DROP TABLE commands');
+    ctx.storage.sql.exec('ALTER TABLE commands_v2 RENAME TO commands');
+    ctx.storage.sql.exec('UPDATE metadata SET version = 2 WHERE singleton = 1');
+  }));
+  await evictDurableObject(stub);
+  const before = await storedRows(stub);
+  const retry = await submit(roomId, command);
+  expect(retry.status).toBe(200);
+  expect(await retry.json()).toMatchObject({ acceptedVersion: 2, duplicate: true, snapshot: { revision: 2 } });
+  expect(await storedRows(stub)).toEqual(before);
+});
+
 it('rejects unknown room and storage versions without rewriting them', async () => {
   const roomId = crypto.randomUUID();
   expect((await create(roomId)).ok).toBe(true);

@@ -13,8 +13,13 @@ export interface RoomEvent {
   readonly revision: number;
   readonly eventIndex: number;
   readonly timestamp: string;
-  readonly event: ActionEvent;
+  readonly event: RoomEventData;
 }
+
+export type RoomEventData = ActionEvent
+  | { readonly type: 'MEMBER_JOINED' | 'MEMBER_LEFT' | 'GAME_STARTED' | 'INVITE_ROTATED'; readonly userId: string }
+  | { readonly type: 'ROLE_SELECTED'; readonly userId: string; readonly role: Role }
+  | { readonly type: 'READY_CHANGED'; readonly userId: string; readonly ready: boolean };
 
 export interface RoomProjectionSource {
   readonly roomId: string;
@@ -48,7 +53,7 @@ function publicOutcome(outcome: Outcome | null): Outcome | null {
   return { kind: 'lost', reason: outcome.reason };
 }
 
-function publicEvent(event: ActionEvent): ActionEvent {
+function publicEvent(event: RoomEventData): RoomEventData {
   const { type } = event;
   switch (type) {
     case 'CARD_DISCARDED': case 'PLAYER_CARD_DRAWN':
@@ -63,8 +68,12 @@ function publicEvent(event: ActionEvent): ActionEvent {
       return { type, userId: event.userId, locationId: event.locationId, color: event.color, count: event.count };
     case 'CENTER_BUILT':
       return { type, userId: event.userId, locationId: event.locationId };
-    case 'ACTION_PASSED':
+    case 'ACTION_PASSED': case 'MEMBER_JOINED': case 'MEMBER_LEFT': case 'GAME_STARTED': case 'INVITE_ROTATED':
       return { type, userId: event.userId };
+    case 'ROLE_SELECTED':
+      return { type, userId: event.userId, role: event.role };
+    case 'READY_CHANGED':
+      return { type, userId: event.userId, ready: event.ready };
     case 'ACTION_SPENT':
       return { type, userId: event.userId, actionsRemaining: event.actionsRemaining };
     case 'EPIDEMIC_DRAWN':
@@ -119,10 +128,17 @@ export function projectRoom(source: RoomProjectionSource) {
 
 export type PublicRoomSnapshot = ReturnType<typeof projectRoom>;
 
-export interface CommandAcceptance {
+export interface CommandReceipt {
   readonly protocolVersion: typeof PROTOCOL_VERSION;
   readonly commandId: string;
   readonly acceptedVersion: number;
   readonly duplicate: boolean;
+}
+
+export interface CommandAcceptance extends CommandReceipt {
   readonly snapshot: PublicRoomSnapshot;
+}
+
+export interface InviteAcceptance extends CommandReceipt {
+  readonly inviteSecret: string;
 }

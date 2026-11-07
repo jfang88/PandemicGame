@@ -1,6 +1,5 @@
-import type { ActionEvent } from '@pandemic/engine';
-import { isUserId, type PublicRoomSnapshot } from '@pandemic/protocol';
-import { GameRoom as BaseGameRoom } from './game-room';
+import { isUserId, type PublicRoomSnapshot, type RoomEventData } from '@pandemic/protocol';
+import { GameRoom as BaseGameRoom, type ReceiptKind } from './game-room';
 import { route, type Env } from './router';
 
 class LocalGameRoom extends BaseGameRoom {
@@ -17,14 +16,15 @@ class LocalGameRoom extends BaseGameRoom {
     throw new Error('Injected command fault');
   }
 
-  protected override recordEvents(events: readonly ActionEvent[], revision: number, timestamp: string): void {
+  protected override recordEvents(events: readonly RoomEventData[], revision: number, timestamp: string): void {
     this.failAt('before-events');
     super.recordEvents(events, revision, timestamp);
   }
 
-  protected override recordReceipt(userId: string, commandId: string, requestHash: string, revision: number): void {
+  protected override recordReceipt(userId: string, commandId: string, requestHash: string, revision: number,
+    kind?: ReceiptKind, privateResult?: string | null): void {
     this.failAt('before-receipt');
-    super.recordReceipt(userId, commandId, requestHash, revision);
+    super.recordReceipt(userId, commandId, requestHash, revision, kind, privateResult);
     this.failAt('after-receipt');
   }
 

@@ -1,6 +1,6 @@
 # T08 — Atomic command execution and retry safety
 
-Status: in review. Dependencies: T07.
+Status: done. Dependencies: T07.
 
 See the [atomic command gate report](../evidence/T08.md) for implementation and verification.
 
