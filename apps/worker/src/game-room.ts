@@ -1,13 +1,13 @@
-import { DurableObject } from 'cloudflare:workers';
 import { applyCommand, assertGameInvariants, BOARD_VERSION, RULES_VERSION, type GameState } from '@pandemic/engine';
 import { projectRoom, PROTOCOL_VERSION, type CommandAcceptance, type CommandEnvelope, type CommandReceipt,
   type ErrorCode, type InviteAcceptance, type PublicRoomSnapshot, type RoomEventData, type RoomMember } from '@pandemic/protocol';
 import { commandHash, requestHash, sha256 } from './command-hash';
 import { applyLobbyCommand, gameSeed, isLobbyCommand } from './lobby';
+import { RealtimeRoom } from './realtime-room';
 import type { Env } from './router';
 
 const SCHEMA_VERSION = 1;
-const STORAGE_VERSION = 3;
+const STORAGE_VERSION = 4;
 const DAY_MS = 86_400_000;
 type RoomRow = {
   roomId: string;
@@ -29,7 +29,7 @@ export type ReceiptKind = 'command' | 'leave' | 'invite' | 'join';
 type Receipt = { requestHash: string; acceptedRevision: number; kind: ReceiptKind; privateResult: string | null };
 type EventRow = { revision: number; eventIndex: number; timestamp: string; eventJson: string };
 type Failure = { readonly code: ErrorCode; readonly currentVersion?: number };
-type Mutation<T> = Failure | { response: T; publish?: PublicRoomSnapshot };
+type Mutation<T> = Failure | { response: T; publish?: true };
 
 function acceptance(commandId: string, acceptedVersion: number, duplicate: boolean): CommandReceipt {
   return { protocolVersion: PROTOCOL_VERSION, commandId, acceptedVersion, duplicate };
@@ -44,8 +44,8 @@ function inviteMatches(expected: string | null, actual: string): boolean {
   return different === 0;
 }
 
-export class GameRoom extends DurableObject<Env> {
-  private compatible = false;
+export class GameRoom extends RealtimeRoom {
+  protected compatible = false;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -55,7 +55,7 @@ export class GameRoom extends DurableObject<Env> {
         sql.exec('CREATE TABLE IF NOT EXISTS metadata (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), version INTEGER NOT NULL)');
         const metadata = sql.exec<{ version: number }>('SELECT version FROM metadata WHERE singleton = 1').toArray()[0];
         if (metadata?.version === STORAGE_VERSION) return true;
-        if (metadata && metadata.version !== 1 && metadata.version !== 2) return false;
+        if (metadata && ![1, 2, 3].includes(metadata.version)) return false;
         if (!metadata) {
           sql.exec(`CREATE TABLE room (
             singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
@@ -71,7 +71,7 @@ export class GameRoom extends DurableObject<Env> {
             ready INTEGER NOT NULL CHECK (ready IN (0, 1)), joinedAt TEXT NOT NULL
           )`);
         }
-        if (metadata?.version !== 2) {
+        if (!metadata || metadata.version === 1) {
           sql.exec(`CREATE TABLE commands (
             userId TEXT NOT NULL, commandId TEXT NOT NULL, requestHash TEXT NOT NULL,
             acceptedRevision INTEGER NOT NULL CHECK (acceptedRevision > 0),
@@ -82,8 +82,15 @@ export class GameRoom extends DurableObject<Env> {
             eventJson TEXT NOT NULL, timestamp TEXT NOT NULL, PRIMARY KEY (revision, eventIndex)
           )`);
         }
-        sql.exec("ALTER TABLE commands ADD COLUMN kind TEXT NOT NULL DEFAULT 'command' CHECK (kind IN ('command','leave','invite','join'))");
-        sql.exec('ALTER TABLE commands ADD COLUMN privateResult TEXT');
+        if (metadata?.version !== 3) {
+          sql.exec("ALTER TABLE commands ADD COLUMN kind TEXT NOT NULL DEFAULT 'command' CHECK (kind IN ('command','leave','invite','join'))");
+          sql.exec('ALTER TABLE commands ADD COLUMN privateResult TEXT');
+        }
+        sql.exec(`CREATE TABLE IF NOT EXISTS socket_tickets (
+          hash TEXT PRIMARY KEY NOT NULL, userId TEXT NOT NULL, origin TEXT NOT NULL,
+          expiresAt INTEGER NOT NULL, authExpiresAt INTEGER NOT NULL
+        )`);
+        sql.exec('CREATE INDEX IF NOT EXISTS socket_tickets_expiry ON socket_tickets (expiresAt)');
         sql.exec(`INSERT INTO metadata (singleton, version) VALUES (1, ?)
           ON CONFLICT (singleton) DO UPDATE SET version = excluded.version`, STORAGE_VERSION);
         return true;
@@ -168,7 +175,7 @@ export class GameRoom extends DurableObject<Env> {
       const result = this.ctx.storage.transactionSync(mutate);
       if ('code' in result) return result;
       await this.ctx.storage.sync();
-      if (result.publish) await this.commandCommitted(result.publish);
+      if (result.publish) await this.commandCommitted();
       return result.response;
     } catch {
       // A delivery error may occur after commit. The client retries with the same ID.
@@ -234,8 +241,9 @@ export class GameRoom extends DurableObject<Env> {
       const leave = type === 'LEAVE_LOBBY';
       this.recordReceipt(userId, commandId, hash, revision, leave ? 'leave' : 'command');
       const recorded = acceptance(commandId, revision, false);
+      if (leave) return { response: recorded, publish: true };
       const snapshot = this.snapshot({ ...room, revision, lifecycle, ownerUserId }, mutation.game ?? null);
-      return { response: leave ? recorded : { ...recorded, snapshot }, publish: snapshot };
+      return { response: { ...recorded, snapshot }, publish: true };
     }
     if (!game) return { code: 'WRONG_PHASE' };
     const transition = applyCommand(game, userId, { type, payload });
@@ -246,7 +254,7 @@ export class GameRoom extends DurableObject<Env> {
     this.recordEvents(transition.events, revision, timestamp);
     this.recordReceipt(userId, commandId, hash, revision);
     const snapshot = this.snapshot({ ...room, revision, lifecycle }, transition.state);
-    return { response: { ...acceptance(commandId, revision, false), snapshot }, publish: snapshot };
+    return { response: { ...acceptance(commandId, revision, false), snapshot }, publish: true };
   }
 
   async rotateInvite(userId: string, commandId: string, expectedVersion: number): Promise<InviteAcceptance | Failure> {
@@ -277,8 +285,7 @@ export class GameRoom extends DurableObject<Env> {
       this.writeLobby(room, revision, now, room.ownerUserId, false, inviteHash);
       this.recordEvents([{ type: 'INVITE_ROTATED', userId }], revision, new Date(now).toISOString());
       this.recordReceipt(userId, commandId, hash, revision, 'invite', inviteSecret);
-      return { response: { ...acceptance(commandId, revision, false), inviteSecret },
-        publish: this.snapshot({ ...room, revision }, null) };
+      return { response: { ...acceptance(commandId, revision, false), inviteSecret }, publish: true };
     });
   }
 
@@ -322,7 +329,7 @@ export class GameRoom extends DurableObject<Env> {
       this.recordEvents([{ type: 'MEMBER_JOINED', userId }], revision, timestamp);
       this.recordReceipt(userId, commandId, hash, revision, 'join');
       const snapshot = this.snapshot({ ...room, revision }, null);
-      return { response: { ...acceptance(commandId, revision, false), snapshot }, publish: snapshot };
+      return { response: { ...acceptance(commandId, revision, false), snapshot }, publish: true };
     });
   }
 
@@ -337,11 +344,6 @@ export class GameRoom extends DurableObject<Env> {
     kind: ReceiptKind = 'command', privateResult: string | null = null): void {
     this.ctx.storage.sql.exec(`INSERT INTO commands (userId, commandId, requestHash, acceptedRevision, kind, privateResult)
       VALUES (?, ?, ?, ?, ?, ?)`, userId, commandId, requestHash, revision, kind, privateResult);
-  }
-
-  protected commandCommitted(snapshot: PublicRoomSnapshot): void | Promise<void> {
-    // T10 will deliver the committed public snapshot to connected room members.
-    void snapshot;
   }
 
   private writeLobby(room: RoomRow, revision: number, now: number, ownerUserId: string,

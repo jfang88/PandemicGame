@@ -4,7 +4,10 @@
   "main": "src/local-test.ts",
   "compatibility_date": "2026-10-01",
   "dev": { "ip": "127.0.0.1" },
-  "vars": { "FIREBASE_PROJECT_ID": "local-placeholder-not-authenticated" },
+  "vars": {
+    "FIREBASE_PROJECT_ID": "local-placeholder-not-authenticated",
+    "APP_ORIGINS": "http://127.0.0.1:8787,http://127.0.0.1:5173"
+  },
   "assets": {
     "directory": "../web/dist",
     "binding": "ASSETS",

@@ -1,6 +1,8 @@
 # T10 — Hibernating realtime and reconnect
 
-Status: not started. Dependencies: T09.
+Status: in review. Dependencies: T09.
+
+See the [realtime gate report](../evidence/T10.md) for implementation and verification.
 
 ## Read
 

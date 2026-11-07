@@ -1,17 +1,27 @@
 import { apiError, isUuid, MAX_JSON_BYTES, parseCommandEnvelope, parseCreateRoom, parseJoinRoom, parseRotateInvite,
   PROTOCOL_VERSION, type ErrorCode } from '@pandemic/protocol';
 import type { GameRoom } from './game-room';
+import { allowedSocketOrigin } from './realtime-room';
 
 export interface Env {
   FIREBASE_PROJECT_ID: string;
   BUILD_SHA?: string;
+  APP_ORIGINS?: string;
   GAME_ROOMS: DurableObjectNamespace<GameRoom>;
   ASSETS?: Fetcher;
+}
+
+/** Trusted server identity. Firebase's verified exp is converted to milliseconds in T11. */
+export interface RequestIdentity {
+  readonly userId: string;
+  readonly authExpiresAt: number;
 }
 
 const messages: Partial<Record<ErrorCode, string>> = {
   BAD_REQUEST: 'Send a valid JSON request.',
   UNAUTHENTICATED: 'Authentication required.',
+  TOKEN_EXPIRED: 'The session expired.',
+  INVALID_TICKET: 'Socket upgrade was denied.',
   NOT_MEMBER: 'Room access denied.',
   NOT_OWNER: 'Only the room owner can do that.',
   INVALID_INVITE: 'The invite is invalid.',
@@ -66,7 +76,7 @@ async function readJson(request: Request): Promise<unknown> {
   }
 }
 
-export async function route(request: Request, env: Env, userId: string | null = null): Promise<Response> {
+export async function route(request: Request, env: Env, identity: RequestIdentity | null = null): Promise<Response> {
   const { pathname } = new URL(request.url);
   if (pathname === '/api/health' && request.method === 'GET') {
     return json({ ok: true, buildSha: env.BUILD_SHA ?? 'local', protocolVersion: PROTOCOL_VERSION });
@@ -76,10 +86,18 @@ export async function route(request: Request, env: Env, userId: string | null = 
   }
   const create = pathname === '/api/rooms' && request.method === 'POST';
   const roomMatch = request.method === 'GET' ? /^\/api\/rooms\/([^/]+)$/.exec(pathname) : null;
-  const mutation = request.method === 'POST' ? /^\/api\/rooms\/([^/]+)\/(commands|invite|join)$/.exec(pathname) : null;
-  if (!create && !roomMatch && !mutation) return reject('ROOM_NOT_FOUND', 'Route not found.');
-  if (!userId) return reject('UNAUTHENTICATED');
+  const mutation = request.method === 'POST' ? /^\/api\/rooms\/([^/]+)\/(commands|invite|join|ws-ticket)$/.exec(pathname) : null;
+  const socket = request.method === 'GET' ? /^\/api\/rooms\/([^/]+)\/ws$/.exec(pathname) : null;
+  if (!create && !roomMatch && !mutation && !socket) return reject('ROOM_NOT_FOUND', 'Route not found.');
   try {
+    if (socket) {
+      const roomId = socket[1];
+      if (!isUuid(roomId) || !allowedSocketOrigin(request, env)) return reject('INVALID_TICKET');
+      return await env.GAME_ROOMS.getByName(roomId.toLowerCase()).fetch(request);
+    }
+    if (!identity) return reject('UNAUTHENTICATED');
+    const { userId, authExpiresAt } = identity;
+    if (authExpiresAt <= Date.now()) return reject('TOKEN_EXPIRED');
     if (create) {
       const body = parseCreateRoom(await readJson(request));
       if (!body.ok) return reject(body.code);
@@ -89,6 +107,12 @@ export async function route(request: Request, env: Env, userId: string | null = 
     const roomId = (roomMatch ?? mutation)?.[1];
     if (!isUuid(roomId)) return reject('BAD_REQUEST', 'Invalid room ID.');
     const stub = env.GAME_ROOMS.getByName(roomId.toLowerCase());
+    if (mutation?.[2] === 'ws-ticket') {
+      const origin = allowedSocketOrigin(request, env);
+      if (!origin || request.body) return reject('BAD_REQUEST');
+      const result = await stub.issueSocketTicket(userId, origin, authExpiresAt);
+      return 'code' in result ? reject(result.code) : json(result);
+    }
     if (mutation?.[2] === 'invite') {
       const body = parseRotateInvite(await readJson(request));
       if (!body.ok) return reject(body.code);
