@@ -67,11 +67,25 @@ legacy = 'supa' + 'base'
 for path in source_files(root):
     if path.is_file() and path.suffix in ('.md', '.json', '.jsonc'):
         assert legacy not in path.read_text().lower(), f'Obsolete provider reference: {path}'
-config_text = (root / 'config/wrangler.example.jsonc').read_text()
+config_text = (root / 'wrangler.jsonc').read_text()
 config = json.loads(re.sub(r'^\s*//.*$', '', config_text, flags=re.M))
+assert 'name' not in config, 'Require an explicit deployment environment'
+assert [migration['new_sqlite_classes'] for migration in config['migrations']] == [['GameRoom'], ['CreateBudget']]
+namespace_ids = set()
 for env in ('preview', 'production'):
-    assert 'FIREBASE_PROJECT_ID' in config['env'][env]['vars']
-    assert not any(key.startswith('VITE_') for key in config['env'][env]['vars'])
+    target = config['env'][env]
+    assert target['name'] == f'pandemicgame-{env}'
+    assert target['workers_dev'] and not target['preview_urls']
+    assert not target['observability']['logs']['invocation_logs']
+    assert 'FIREBASE_PROJECT_ID' in target['vars']
+    assert not any(key.startswith('VITE_') for key in target['vars'])
+    assert target['durable_objects']['bindings'] == [
+        {'name': 'GAME_ROOMS', 'class_name': 'GameRoom'},
+        {'name': 'CREATE_BUDGETS', 'class_name': 'CreateBudget'},
+    ], 'Durable Objects must be local to each named Worker'
+    for binding in target['ratelimits']:
+        assert binding['namespace_id'] not in namespace_ids, 'Share no preview/production limiter namespaces'
+        namespace_ids.add(binding['namespace_id'])
 for task in tasks:
     text = (root / task['file']).read_text()
     for section in ('deliverables', 'acceptance', 'checks'):

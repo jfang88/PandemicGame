@@ -23,7 +23,10 @@
     "test:auth-smoke": "node scripts/test-auth-popup.mjs",
     "test:connected-smoke": "node scripts/test-connected-room.mjs",
     "test:e2e": "node scripts/test-connected-room.mjs --full",
-    "test:load": "node scripts/load-rooms.mjs"
+    "test:load": "node scripts/load-rooms.mjs",
+    "validate:deployment": "node scripts/deploy-cloudflare.mjs validate",
+    "deploy:preview": "node scripts/deploy-cloudflare.mjs deploy preview",
+    "deploy:production": "node scripts/deploy-cloudflare.mjs deploy production"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.6.0",

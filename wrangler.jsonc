@@ -1,0 +1,124 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "main": "apps/worker/src/index.ts",
+  "compatibility_date": "2026-10-28",
+  "assets": {
+    "directory": "apps/web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/api",
+      "/api/*"
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "GameRoom"
+      ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": [
+        "CreateBudget"
+      ]
+    }
+  ],
+  "env": {
+    "preview": {
+      "name": "pandemicgame-preview",
+      "observability": {
+        "logs": {
+          "enabled": true,
+          "invocation_logs": false
+        }
+      },
+      "ratelimits": [
+        {
+          "name": "EDGE_ROOM_IP",
+          "namespace_id": "1611",
+          "simple": {
+            "limit": 120,
+            "period": 60
+          }
+        },
+        {
+          "name": "EDGE_ROOM_JOIN",
+          "namespace_id": "1612",
+          "simple": {
+            "limit": 20,
+            "period": 60
+          }
+        }
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "GAME_ROOMS",
+            "class_name": "GameRoom"
+          },
+          {
+            "name": "CREATE_BUDGETS",
+            "class_name": "CreateBudget"
+          }
+        ]
+      },
+      "vars": {
+        "APP_ENV": "preview",
+        "APP_ORIGINS": "REPLACE_WITH_PREVIEW_HTTPS_ORIGIN",
+        "FIREBASE_PROJECT_ID": "REPLACE_WITH_PREVIEW_FIREBASE_PROJECT_ID"
+      },
+      "workers_dev": true,
+      "preview_urls": false
+    },
+    "production": {
+      "name": "pandemicgame-production",
+      "observability": {
+        "logs": {
+          "enabled": true,
+          "invocation_logs": false
+        }
+      },
+      "ratelimits": [
+        {
+          "name": "EDGE_ROOM_IP",
+          "namespace_id": "1621",
+          "simple": {
+            "limit": 120,
+            "period": 60
+          }
+        },
+        {
+          "name": "EDGE_ROOM_JOIN",
+          "namespace_id": "1622",
+          "simple": {
+            "limit": 20,
+            "period": 60
+          }
+        }
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "GAME_ROOMS",
+            "class_name": "GameRoom"
+          },
+          {
+            "name": "CREATE_BUDGETS",
+            "class_name": "CreateBudget"
+          }
+        ]
+      },
+      "vars": {
+        "APP_ENV": "production",
+        "APP_ORIGINS": "REPLACE_WITH_PRODUCTION_HTTPS_ORIGIN",
+        "FIREBASE_PROJECT_ID": "REPLACE_WITH_PRODUCTION_FIREBASE_PROJECT_ID"
+      },
+      "workers_dev": true,
+      "preview_urls": false
+    }
+  },
+  "workers_dev": true,
+  "preview_urls": false
+}

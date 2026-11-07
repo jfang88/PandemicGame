@@ -1,0 +1,105 @@
+name: Deploy Cloudflare
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Deployment environment
+        type: choice
+        required: true
+        default: preview
+        options:
+          - preview
+          - production
+      release_sha:
+        description: Exact selected main commit SHA (required for production)
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require the canonical repository and protected main
+        shell: bash
+        env:
+          REPO_ID: ${{ github.repository_id }}
+          REF_PROTECTED: ${{ github.ref_protected }}
+          TARGET: ${{ inputs.target }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          DISPATCH_ACTOR_ID: ${{ github.actor_id }}
+          RERUN_ACTOR: ${{ github.triggering_actor }}
+        run: |
+          set -euo pipefail
+          if [[ "$REPO_ID" != 1436820826 || "$GITHUB_REF" != refs/heads/main || "$REF_PROTECTED" != true ]]; then
+            echo 'Dispatch from protected main in the canonical repository.'
+            exit 1
+          fi
+          if [[ "$TARGET" != preview && "$TARGET" != production ]]; then
+            echo 'Select preview or production.'
+            exit 1
+          fi
+          if [[ -n "$RELEASE_SHA" && "$RELEASE_SHA" != "$GITHUB_SHA" ]]; then
+            echo 'The confirmation SHA must match the selected main commit.'
+            exit 1
+          fi
+          if [[ "$TARGET" == production && ( "$DISPATCH_ACTOR_ID" != 62051186 || "$RERUN_ACTOR" != jfang88 || "$RELEASE_SHA" != "$GITHUB_SHA" ) ]]; then
+            echo 'Production requires an explicit dispatch and SHA confirmation from the repository owner.'
+            exit 1
+          fi
+
+  verify:
+    needs: authorize
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: [authorize, verify]
+    # A failed-job rerun can reuse the completed authorize job.
+    if: >-
+      github.repository_id == '1436820826' &&
+      github.ref == 'refs/heads/main' && github.ref_protected &&
+      (inputs.target == 'preview' ||
+        (inputs.target == 'production' && github.actor_id == '62051186' &&
+          github.triggering_actor == 'jfang88' && inputs.release_sha == github.sha))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: ${{ inputs.target }}
+      url: ${{ steps.publish.outputs.url }}
+    concurrency:
+      group: cloudflare-deploy-${{ inputs.target }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Validate, deploy and verify public routing
+        id: publish
+        shell: bash
+        env:
+          TARGET: ${{ inputs.target }}
+          BUILD_SHA: ${{ github.sha }}
+          PANDEMIC_PRODUCTION_CONFIRM_SHA: ${{ inputs.release_sha }}
+          APP_ORIGINS: ${{ vars.APP_ORIGINS }}
+          FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+          PANDEMIC_PREVIEW_FIREBASE_PROJECT_ID: ${{ vars.PANDEMIC_PREVIEW_FIREBASE_PROJECT_ID }}
+          PANDEMIC_PRODUCTION_FIREBASE_PROJECT_ID: ${{ vars.PANDEMIC_PRODUCTION_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          npm run "deploy:$TARGET"
+          printf 'url=%s\n' "$APP_ORIGINS" >> "$GITHUB_OUTPUT"
