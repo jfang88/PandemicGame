@@ -1,6 +1,6 @@
 # T09 — Private lobby invites and membership
 
-Status: in review. Dependencies: T08.
+Status: done. Dependencies: T08.
 
 See the [lobby gate report](../evidence/T09.md) for implementation and verification.
 

@@ -60,6 +60,10 @@ Generate commandId once per user intent. On timeout or 5xx retry the identical e
 
 Server frame `{type:'snapshot',protocolVersion:1,revision,state}` or `{type:'session_expired'}`. Presence may be `{type:'presence',userIds:[...]}` and does not change game revision or ready status. Treat it as advisory. Client sends no gameplay frames; reject oversized or unsupported frames. Client reconnects with jittered 0.5–30 second backoff, refreshes auth if necessary, obtains a new ticket, and receives snapshot. Disable command UI while offline; do not queue a sequence of stale moves. Handle multiple tabs and missing broadcasts through snapshot/version checks.
 
+Set `APP_ORIGINS` to a comma-separated list of exact browser origins. The ticket request and upgrade require a matching `Origin` header, and the ticket is bound to that origin. A ticket expires at the earlier of 60 seconds or the trusted authentication expiry. The loopback test Worker supplies a test expiry. Firebase verification in T11 supplies the verified token expiry in milliseconds.
+
+The browser transport is exported from `@pandemic/protocol/room-transport`. It allows one outstanding command intent and up to three attempts with the original envelope. A stale response refreshes the snapshot and returns control to the player. An older acknowledgment or socket frame cannot replace a newer revision.
+
 ## Firebase authentication details
 
 Bearer credentials are Firebase ID tokens obtained from the Web SDK, not Firebase custom tokens, Google access tokens or Microsoft access tokens. The server pins Firebase project ID/issuer/audience per environment and uses verified `sub` as an opaque UID (1–128 characters; do not apply a UUID validator). `recipientUserId` uses that same UID format. SDK token refresh may precede an exact same-ID retry; it must not change command identity or expectedVersion. The WebSocket ticket authExpiresAt is the verified ID-token expiry. See AUTH.md for the full claim contract.

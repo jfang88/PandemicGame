@@ -1,4 +1,4 @@
-import { isUserId, type PublicRoomSnapshot, type RoomEventData } from '@pandemic/protocol';
+import { isUserId, type RoomEventData } from '@pandemic/protocol';
 import { GameRoom as BaseGameRoom, type ReceiptKind } from './game-room';
 import { route, type Env } from './router';
 
@@ -28,8 +28,8 @@ class LocalGameRoom extends BaseGameRoom {
     this.failAt('after-receipt');
   }
 
-  protected override commandCommitted(snapshot: PublicRoomSnapshot): void {
-    super.commandCommitted(snapshot);
+  protected override commandCommitted(): void {
+    super.commandCommitted();
     this.failAt('after-commit');
   }
 }
@@ -42,6 +42,10 @@ export default {
     const hostname = new URL(request.url).hostname;
     const uid = request.headers.get('x-pandemic-test-uid');
     const loopback = hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '[::1]';
-    return route(request, env, loopback && isUserId(uid) ? uid : null);
+    const now = Date.now();
+    const expiry = request.headers.get('x-pandemic-test-auth-expires-at');
+    const authExpiresAt = expiry === null ? now + 3_600_000 : Number(expiry);
+    const valid = Number.isSafeInteger(authExpiresAt) && authExpiresAt <= now + 3_600_000;
+    return route(request, env, loopback && isUserId(uid) && valid ? { userId: uid, authExpiresAt } : null);
   },
 } satisfies ExportedHandler<Env>;
