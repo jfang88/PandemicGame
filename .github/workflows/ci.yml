@@ -19,6 +19,7 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test:unit
+      - run: npm run test:integration
       - run: npm run build
       - run: npm run check:docs
       - name: Install Chromium for foundation smoke

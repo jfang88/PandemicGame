@@ -31,9 +31,9 @@ try {
   await page.getByRole('heading', { name: 'PandemicGame' }).waitFor();
   await page.getByText('Local Worker connected', { exact: true }).waitFor();
   for (const [path, method, status, body] of [
-    ['/api/health', 'GET', 200, { ok: true }],
-    ['/api/missing', 'GET', 404, { error: 'not_found' }],
-    ['/api/health', 'POST', 404, { error: 'not_found' }],
+    ['/api/health', 'GET', 200, { ok: true, buildSha: 'local', protocolVersion: 1 }],
+    ['/api/missing', 'GET', 404, { error: { code: 'ROOM_NOT_FOUND', message: 'Route not found.', retryable: false } }],
+    ['/api/health', 'POST', 404, { error: { code: 'ROOM_NOT_FOUND', message: 'Route not found.', retryable: false } }],
   ]) {
     const response = await page.request.fetch(`http://127.0.0.1:5173${path}`, { method });
     assert.equal(response.status(), status);

@@ -1,8 +1,10 @@
 {
-  // Development-only Worker; no Durable Object bindings until T07.
+  // Foundation development and the production-like dry build use the normal entry.
   "name": "pandemic-game-local",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "dev": { "ip": "127.0.0.1", "inspector_port": 9230 },
-  "vars": { "FIREBASE_PROJECT_ID": "local-placeholder-not-authenticated" }
+  "vars": { "FIREBASE_PROJECT_ID": "local-placeholder-not-authenticated" },
+  "durable_objects": { "bindings": [{ "name": "GAME_ROOMS", "class_name": "GameRoom" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }]
 }

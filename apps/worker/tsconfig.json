@@ -7,7 +7,8 @@
     "types": [
       "@cloudflare/workers-types"
     ],
-    "composite": true,
+    "incremental": true,
+    "resolveJsonModule": true,
     "tsBuildInfoFile": "../../node_modules/.cache/worker.tsbuildinfo"
   },
   "include": [

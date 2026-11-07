@@ -5,7 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --config wrangler.local.jsonc --local --port 8787",
+    "dev:local-test": "wrangler dev --config wrangler.local-test.jsonc --local --port 8787",
     "build": "wrangler deploy --config wrangler.local.jsonc --dry-run --outdir dist"
+  },
+  "dependencies": {
+    "@pandemic/engine": "*",
+    "@pandemic/protocol": "*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20261106.1",
