@@ -27,7 +27,7 @@ For a planning example, one 300-command match might use 500–1,000 API requests
 | Lobby retention | 7 days since accepted mutation |
 | Running retention | 30 days since accepted gameplay mutation |
 | Finished retention | 30 days since result |
-| Expired tombstone | 30 additional days, then delete all |
+| Expired tombstone | 30 additional days, then remove the expiry timestamp and keep only a retired-ID marker |
 
 T16 implements room-local rate limits durably and account/edge-level create/join abuse controls with Cloudflare's currently supported facility. Verify its scope: approximate/per-location edge limits are abuse protection, not a globally exact quota. If a chosen rate-limit binding is unavailable on the account, document and test an alternative before deployment; never pretend a Worker-global Map is reliable. No all-room coordinator is needed for gameplay. Bound ticket creation and clean expired tickets.
 
@@ -44,7 +44,7 @@ Configure usage notifications and reasonable CPU/request limits in the provider 
 - Write failure: return retryable error, state stays unchanged; same-ID retry is safe.
 - Crash after commit: stored receipt answers retry; restart restores exact decks/phase.
 - Provider outage or quota exhaustion: show unavailable status and retry guidance; do not invent lost/won results.
-- Broken release: inspect sanitized logs; rollback compatible code or deploy forward fix. Never reset rooms to clear an error.
+- Broken release: inspect sanitized logs; roll back to a build that can read the current storage version or deploy a forward fix. T14 upgrades storage metadata to v5 while keeping the game snapshot schema at v1. Builds that only understand storage v4 reject v5 rooms. Rehearse a v5-compatible rollback with an existing room, including a pending discard and a retired room, before relying on rollback in preview.
 - Account removal request: document how owner identifies and deletes affected retained room data before public launch. No global searchable player profile is required in MVP; keep data minimal.
 
 ## Release evidence

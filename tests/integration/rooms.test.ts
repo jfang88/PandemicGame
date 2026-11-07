@@ -1,4 +1,4 @@
-import { evictDurableObject, runInDurableObject } from 'cloudflare:test';
+import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import { env, exports } from 'cloudflare:workers';
 import { applyCommand, createGame, type GameState, type LocationCardId } from '@pandemic/engine';
 import type { CommandEnvelope } from '@pandemic/protocol';
@@ -104,7 +104,7 @@ async function roomWithGame(game: GameState) {
     ctx.storage.sql.exec("UPDATE members SET role = 'medic' WHERE userId = ?", owner);
     ctx.storage.sql.exec("INSERT INTO members VALUES (?, 3, 'Guest', 'scientist', 1, ?)", other, new Date().toISOString());
     ctx.storage.sql.exec('UPDATE room SET inviteHash = ?', 'hidden-invite-hash');
-    instance['persistGame'](game);
+    return instance['persistGame'](game);
   });
   return { roomId, stub };
 }
@@ -266,6 +266,7 @@ it('migrates a T07 v1 database without rebuilding the room or its decks', async 
   await runInDurableObject(stub, (_instance, ctx) => ctx.storage.transactionSync(() => {
     ctx.storage.sql.exec('DROP TABLE commands');
     ctx.storage.sql.exec('DROP TABLE events');
+    ctx.storage.sql.exec('DROP TABLE retirement');
     ctx.storage.sql.exec('UPDATE metadata SET version = 1 WHERE singleton = 1');
   }));
   await evictDurableObject(stub);
@@ -285,6 +286,7 @@ it('migrates T08 v2 receipts and still deduplicates the original command', async
     ctx.storage.sql.exec('INSERT INTO commands_v2 SELECT userId, commandId, requestHash, acceptedRevision FROM commands');
     ctx.storage.sql.exec('DROP TABLE commands');
     ctx.storage.sql.exec('ALTER TABLE commands_v2 RENAME TO commands');
+    ctx.storage.sql.exec('DROP TABLE retirement');
     ctx.storage.sql.exec('UPDATE metadata SET version = 2 WHERE singleton = 1');
   }));
   await evictDurableObject(stub);
@@ -305,6 +307,7 @@ it('rejects unknown room and storage versions without rewriting them', async () 
   await error(await request(`/api/rooms/${roomId}`, owner), 503, 'ROOM_INCOMPATIBLE');
   await error(await request(`/api/rooms/${roomId}`, other), 403, 'NOT_MEMBER');
   await runInDurableObject(stub, (_instance, ctx) => {
+    ctx.storage.sql.exec('DROP TABLE retirement');
     ctx.storage.sql.exec('UPDATE metadata SET version = ?', 99);
   });
   await evictDurableObject(stub);
@@ -338,4 +341,69 @@ it('rejects the local identity on a remote hostname and in the normal Worker ent
     ...options, body: JSON.stringify(pass(0)),
   }), bindings), 401, 'UNAUTHENTICATED');
   await error(await request(`/api/rooms/${roomId}`, owner), 404, 'ROOM_NOT_FOUND');
+});
+
+it('rearms v4 storage on eviction and retires an expired room without reviving old IDs', async () => {
+  const roomId = crypto.randomUUID();
+  expect((await create(roomId)).ok).toBe(true);
+  const stub = bindings.GAME_ROOMS.getByName(roomId);
+  const path = `/api/rooms/${roomId}`;
+  const expiry = new Date(Date.now() + 86_400_000).toISOString();
+  await runInDurableObject(stub, async (_instance, ctx) => {
+    ctx.storage.sql.exec('UPDATE room SET expiresAt = ?', expiry);
+    ctx.storage.sql.exec('DROP TABLE retirement');
+    ctx.storage.sql.exec('UPDATE metadata SET version = 4');
+    await ctx.storage.setAlarm(Date.parse(expiry) + 60_000);
+  });
+  await evictDurableObject(stub);
+  expect((await request(path, owner)).ok).toBe(true);
+  expect(await runInDurableObject(stub, (_instance, ctx) => ctx.storage.getAlarm())).toBe(Date.parse(expiry));
+  expect((await create(roomId)).ok).toBe(true);
+  expect(await runInDurableObject(stub, (_instance, ctx) =>
+    ctx.storage.sql.exec<{ expiresAt: string }>('SELECT expiresAt FROM room').one().expiresAt)).toBe(expiry);
+
+  await runInDurableObject(stub, (_instance, ctx) => {
+    ctx.storage.sql.exec('UPDATE room SET expiresAt = ?, inviteHash = ?', new Date(Date.now() - 1).toISOString(), 'old-invite');
+    ctx.storage.sql.exec("INSERT INTO commands VALUES (?, ?, 'request', 1, 'invite', 'private')", owner, crypto.randomUUID());
+  });
+  await error(await request(path, owner), 410, 'ROOM_EXPIRED');
+  await error(await create(roomId), 410, 'ROOM_EXPIRED');
+  const join = () => request(path + '/join', other, { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ commandId: crypto.randomUUID(), inviteSecret: 'a'.repeat(32) }) });
+  await error(await join(), 410, 'ROOM_EXPIRED');
+
+  expect(await runDurableObjectAlarm(stub)).toBe(true);
+  await evictDurableObject(stub);
+  await error(await request(path, owner), 410, 'ROOM_EXPIRED');
+  await error(await create(roomId), 410, 'ROOM_EXPIRED');
+  await error(await join(), 410, 'ROOM_EXPIRED');
+  const rows = await runInDurableObject(stub, (_instance, ctx) => ctx.storage.sql.exec(
+    `SELECT (SELECT count(*) FROM room) AS rooms, (SELECT count(*) FROM members) AS members,
+      (SELECT count(*) FROM commands) AS commands, (SELECT count(*) FROM events) AS events,
+      (SELECT count(*) FROM socket_tickets) AS tickets`,
+  ).one());
+  expect(rows).toEqual({ rooms: 0, members: 0, commands: 0, events: 0, tickets: 0 });
+
+  await runInDurableObject(stub, (_instance, ctx) => ctx.storage.sql.exec('UPDATE retirement SET untilMs = 1'));
+  expect(await runDurableObjectAlarm(stub)).toBe(true);
+  await evictDurableObject(stub);
+  await error(await request(path, owner), 404, 'ROOM_NOT_FOUND');
+  await error(await join(), 404, 'ROOM_NOT_FOUND');
+  await error(await create(roomId), 409, 'ROOM_CONFLICT');
+  expect(await runInDurableObject(stub, (_instance, ctx) => ctx.storage.getAlarm())).toBeNull();
+});
+
+it('leaves the exact future-rules game intact when the retention alarm is due', async () => {
+  const { roomId, stub } = await roomWithGame(gameWithPendingDiscard());
+  await runInDurableObject(stub, (_instance, ctx) => {
+    ctx.storage.sql.exec("UPDATE room SET gameJson = json_set(gameJson, '$.rulesVersion', 'future'), expiresAt = ?",
+      new Date(Date.now() - 1).toISOString());
+  });
+  const before = await storedRows(stub);
+  expect(await runDurableObjectAlarm(stub)).toBe(true);
+  await evictDurableObject(stub);
+  expect(await storedRows(stub)).toEqual(before);
+  expect((await request(`/api/rooms/${roomId}`, owner)).status).toBe(503);
+  expect((await submit(roomId, pass(1))).status).toBe(503);
+  expect(await runInDurableObject(stub, (_instance, ctx) => ctx.storage.getAlarm())).toBeNull();
 });

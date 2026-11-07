@@ -7,8 +7,9 @@ import { RealtimeRoom } from './realtime-room';
 import type { Env } from './router';
 
 const SCHEMA_VERSION = 1;
-const STORAGE_VERSION = 4;
+const STORAGE_VERSION = 5;
 const DAY_MS = 86_400_000;
+const ABANDONED_RECEIPT_MS = 60_000;
 type RoomRow = {
   roomId: string;
   schemaVersion: number;
@@ -17,6 +18,7 @@ type RoomRow = {
   revision: number;
   lifecycle: 'LOBBY' | 'RUNNING' | 'WON' | 'LOST' | 'EXPIRED';
   ownerUserId: string;
+  expiresAt: string;
   inviteHash: string | null;
   gameJson: string | null;
 };
@@ -55,52 +57,117 @@ export class GameRoom extends RealtimeRoom {
         sql.exec('CREATE TABLE IF NOT EXISTS metadata (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), version INTEGER NOT NULL)');
         const metadata = sql.exec<{ version: number }>('SELECT version FROM metadata WHERE singleton = 1').toArray()[0];
         if (metadata?.version === STORAGE_VERSION) return true;
-        if (metadata && ![1, 2, 3].includes(metadata.version)) return false;
-        if (!metadata) {
-          sql.exec(`CREATE TABLE room (
-            singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-            roomId TEXT NOT NULL, schemaVersion INTEGER NOT NULL, rulesVersion TEXT NOT NULL, boardVersion TEXT NOT NULL,
-            revision INTEGER NOT NULL CHECK (revision >= 0),
-            lifecycle TEXT NOT NULL CHECK (lifecycle IN ('LOBBY', 'RUNNING', 'WON', 'LOST', 'EXPIRED')),
-            ownerUserId TEXT NOT NULL, createdAt TEXT NOT NULL, lastMutationAt TEXT NOT NULL, expiresAt TEXT NOT NULL,
-            inviteHash TEXT, gameJson TEXT
-          )`);
-          sql.exec(`CREATE TABLE members (
-            userId TEXT PRIMARY KEY NOT NULL, seat INTEGER UNIQUE NOT NULL CHECK (seat BETWEEN 0 AND 3),
-            displayName TEXT NOT NULL, role TEXT UNIQUE CHECK (role IN ('medic', 'scientist', 'builder', 'courier')),
-            ready INTEGER NOT NULL CHECK (ready IN (0, 1)), joinedAt TEXT NOT NULL
-          )`);
-        }
-        if (!metadata || metadata.version === 1) {
-          sql.exec(`CREATE TABLE commands (
-            userId TEXT NOT NULL, commandId TEXT NOT NULL, requestHash TEXT NOT NULL,
-            acceptedRevision INTEGER NOT NULL CHECK (acceptedRevision > 0),
-            PRIMARY KEY (userId, commandId)
-          )`);
-          sql.exec(`CREATE TABLE events (
-            revision INTEGER NOT NULL CHECK (revision > 0), eventIndex INTEGER NOT NULL CHECK (eventIndex >= 0),
-            eventJson TEXT NOT NULL, timestamp TEXT NOT NULL, PRIMARY KEY (revision, eventIndex)
-          )`);
-        }
-        if (metadata?.version !== 3) {
-          sql.exec("ALTER TABLE commands ADD COLUMN kind TEXT NOT NULL DEFAULT 'command' CHECK (kind IN ('command','leave','invite','join'))");
-          sql.exec('ALTER TABLE commands ADD COLUMN privateResult TEXT');
-        }
-        sql.exec(`CREATE TABLE IF NOT EXISTS socket_tickets (
-          hash TEXT PRIMARY KEY NOT NULL, userId TEXT NOT NULL, origin TEXT NOT NULL,
-          expiresAt INTEGER NOT NULL, authExpiresAt INTEGER NOT NULL
-        )`);
-        sql.exec('CREATE INDEX IF NOT EXISTS socket_tickets_expiry ON socket_tickets (expiresAt)');
+        if (metadata && ![1, 2, 3, 4].includes(metadata.version)) return false;
+        if (metadata?.version !== 4) this.migrateLegacyStorage(metadata?.version);
+        sql.exec('CREATE TABLE retirement (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), untilMs INTEGER)');
         sql.exec(`INSERT INTO metadata (singleton, version) VALUES (1, ?)
           ON CONFLICT (singleton) DO UPDATE SET version = excluded.version`, STORAGE_VERSION);
         return true;
       });
+      if (this.compatible) {
+        const alarm = await ctx.storage.getAlarm();
+        if (alarm === null || this.retentionDeadline(Date.now()) < alarm) await this.scheduleExpiry();
+      }
+    });
+  }
+
+  private migrateLegacyStorage(version: number | undefined): void {
+    const sql = this.ctx.storage.sql;
+    if (version === undefined) {
+      sql.exec(`CREATE TABLE room (
+        singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+        roomId TEXT NOT NULL, schemaVersion INTEGER NOT NULL, rulesVersion TEXT NOT NULL, boardVersion TEXT NOT NULL,
+        revision INTEGER NOT NULL CHECK (revision >= 0),
+        lifecycle TEXT NOT NULL CHECK (lifecycle IN ('LOBBY', 'RUNNING', 'WON', 'LOST', 'EXPIRED')),
+        ownerUserId TEXT NOT NULL, createdAt TEXT NOT NULL, lastMutationAt TEXT NOT NULL, expiresAt TEXT NOT NULL,
+        inviteHash TEXT, gameJson TEXT
+      )`);
+      sql.exec(`CREATE TABLE members (
+        userId TEXT PRIMARY KEY NOT NULL, seat INTEGER UNIQUE NOT NULL CHECK (seat BETWEEN 0 AND 3),
+        displayName TEXT NOT NULL, role TEXT UNIQUE CHECK (role IN ('medic', 'scientist', 'builder', 'courier')),
+        ready INTEGER NOT NULL CHECK (ready IN (0, 1)), joinedAt TEXT NOT NULL
+      )`);
+    }
+    if (version === undefined || version === 1) {
+      sql.exec(`CREATE TABLE commands (
+        userId TEXT NOT NULL, commandId TEXT NOT NULL, requestHash TEXT NOT NULL,
+        acceptedRevision INTEGER NOT NULL CHECK (acceptedRevision > 0),
+        PRIMARY KEY (userId, commandId)
+      )`);
+      sql.exec(`CREATE TABLE events (
+        revision INTEGER NOT NULL CHECK (revision > 0), eventIndex INTEGER NOT NULL CHECK (eventIndex >= 0),
+        eventJson TEXT NOT NULL, timestamp TEXT NOT NULL, PRIMARY KEY (revision, eventIndex)
+      )`);
+    }
+    if (version !== 3) {
+      sql.exec("ALTER TABLE commands ADD COLUMN kind TEXT NOT NULL DEFAULT 'command' CHECK (kind IN ('command','leave','invite','join'))");
+      sql.exec('ALTER TABLE commands ADD COLUMN privateResult TEXT');
+    }
+    sql.exec(`CREATE TABLE IF NOT EXISTS socket_tickets (
+      hash TEXT PRIMARY KEY NOT NULL, userId TEXT NOT NULL, origin TEXT NOT NULL,
+      expiresAt INTEGER NOT NULL, authExpiresAt INTEGER NOT NULL
+    )`);
+    sql.exec('CREATE INDEX IF NOT EXISTS socket_tickets_expiry ON socket_tickets (expiresAt)');
+  }
+
+  private retirement(): { untilMs: number | null } | undefined {
+    return this.ctx.storage.sql.exec<{ untilMs: number | null }>(
+      'SELECT untilMs FROM retirement WHERE singleton = 1',
+    ).toArray()[0];
+  }
+
+  private missingRoom(): 'ROOM_EXPIRED' | 'ROOM_NOT_FOUND' {
+    const until = this.retirement()?.untilMs;
+    return until != null && until > Date.now() ? 'ROOM_EXPIRED' : 'ROOM_NOT_FOUND';
+  }
+
+  private expired(room: RoomRow, now = Date.now()): boolean {
+    return room.lifecycle === 'EXPIRED' || Date.parse(room.expiresAt) <= now;
+  }
+
+  protected retentionDeadline(now: number): number {
+    const room = this.room();
+    if (!room) return this.retirement()?.untilMs ?? Infinity;
+    const deadline = Date.parse(room.expiresAt);
+    if (!this.supports(room) || !Number.isFinite(deadline)) return Infinity;
+    // A future game schema must stay intact for a compatible release to recover it.
+    if (deadline <= now && !this.supportsStoredGame(room)) return Infinity;
+    return deadline;
+  }
+
+  private supportsStoredGame(room: RoomRow): boolean {
+    try {
+      const game = this.loadGame(room);
+      return !game || this.supports(game);
+    } catch {
+      return false;
+    }
+  }
+
+  protected expireRetention(now: number): boolean {
+    return this.ctx.storage.transactionSync(() => {
+      const sql = this.ctx.storage.sql;
+      const room = this.room();
+      if (!room) {
+        sql.exec('UPDATE retirement SET untilMs = NULL WHERE untilMs <= ?', now);
+        return false;
+      }
+      const deadline = this.retentionDeadline(now);
+      if (deadline > now) return false;
+      const until = deadline + 30 * DAY_MS;
+      sql.exec('INSERT INTO retirement (singleton, untilMs) VALUES (1, ?)', until > now ? until : null);
+      sql.exec('DELETE FROM socket_tickets');
+      sql.exec('DELETE FROM commands');
+      sql.exec('DELETE FROM events');
+      sql.exec('DELETE FROM members');
+      sql.exec('DELETE FROM room');
+      return true;
     });
   }
 
   private room(): RoomRow | undefined {
     return this.ctx.storage.sql.exec<RoomRow>(`SELECT roomId, schemaVersion, rulesVersion, boardVersion,
-      revision, lifecycle, ownerUserId, inviteHash, gameJson FROM room WHERE singleton = 1`).toArray()[0];
+      revision, lifecycle, ownerUserId, expiresAt, inviteHash, gameJson FROM room WHERE singleton = 1`).toArray()[0];
   }
 
   private supports(room: Pick<RoomRow, 'schemaVersion' | 'rulesVersion' | 'boardVersion'>): boolean {
@@ -120,16 +187,18 @@ export class GameRoom extends RealtimeRoom {
     }
   }
 
-  create(roomId: string, ownerUserId: string, displayName = 'Player'): CreateResult {
+  async create(roomId: string, ownerUserId: string, displayName = 'Player'): Promise<CreateResult> {
     if (!this.compatible) return { code: this.mayReportIncompatibility(ownerUserId) ? 'ROOM_INCOMPATIBLE' : 'ROOM_CONFLICT' };
-    return this.ctx.storage.transactionSync(() => {
+    const result = this.ctx.storage.transactionSync<CreateResult>(() => {
       const existing = this.room();
       if (existing) {
         if (existing.ownerUserId !== ownerUserId) return { code: 'ROOM_CONFLICT' };
-        if (!this.supports(existing)) return { code: 'ROOM_INCOMPATIBLE' };
-        if (existing.lifecycle === 'EXPIRED') return { code: 'ROOM_EXPIRED' };
+        if (!this.supports(existing) || !this.supportsStoredGame(existing)) return { code: 'ROOM_INCOMPATIBLE' };
+        if (this.expired(existing)) return { code: 'ROOM_EXPIRED' };
         return { roomId: existing.roomId, version: existing.revision };
       }
+      const retired = this.retirement();
+      if (retired) return { code: retired.untilMs != null && retired.untilMs > Date.now() ? 'ROOM_EXPIRED' : 'ROOM_CONFLICT' };
       const now = Date.now();
       const timestamp = new Date(now).toISOString();
       const sql = this.ctx.storage.sql;
@@ -143,17 +212,19 @@ export class GameRoom extends RealtimeRoom {
         VALUES (?, 0, ?, NULL, 0, ?)`, ownerUserId, sanitizeDisplayName(displayName), timestamp);
       return { roomId, version: 0 };
     });
+    if (!('code' in result)) await this.scheduleExpiry();
+    return result;
   }
 
   read(userId: string): ReadResult {
     if (!this.compatible) return { code: this.mayReportIncompatibility(userId) ? 'ROOM_INCOMPATIBLE' : 'NOT_MEMBER' };
     const room = this.room();
-    if (!room) return { code: 'ROOM_NOT_FOUND' };
+    if (!room) return { code: this.missingRoom() };
     if (!this.hasMember(userId)) return { code: 'NOT_MEMBER' };
     if (!this.supports(room)) return { code: 'ROOM_INCOMPATIBLE' };
-    if (room.lifecycle === 'EXPIRED') return { code: 'ROOM_EXPIRED' };
     const game = this.loadGame(room);
     if (game && !this.supports(game)) return { code: 'ROOM_INCOMPATIBLE' };
+    if (this.expired(room)) return { code: 'ROOM_EXPIRED' };
     return { snapshot: this.snapshot(room, game) };
   }
 
@@ -174,6 +245,7 @@ export class GameRoom extends RealtimeRoom {
     try {
       const result = this.ctx.storage.transactionSync(mutate);
       if ('code' in result) return result;
+      await this.scheduleExpiry();
       await this.ctx.storage.sync();
       if (result.publish) await this.commandCommitted();
       return result.response;
@@ -200,10 +272,12 @@ export class GameRoom extends RealtimeRoom {
     seed: number | undefined): Mutation<CommandAcceptance | CommandReceipt> {
     if (!this.compatible) return { code: this.mayReportIncompatibility(userId) ? 'ROOM_INCOMPATIBLE' : 'NOT_MEMBER' };
     const room = this.room();
-    if (!room) return { code: 'ROOM_NOT_FOUND' };
+    if (!room) return { code: this.missingRoom() };
+    const now = Date.now();
     const { commandId, expectedVersion, type, payload } = command;
     if (!this.hasMember(userId)) {
-      if (type === 'LEAVE_LOBBY' && this.supports(room)) {
+      if (type === 'LEAVE_LOBBY' && this.supports(room)
+        && Date.parse(room.expiresAt) > now) {
         const leave = this.receipt(userId, commandId);
         if (leave?.kind === 'leave' && leave.requestHash === hash) {
           return { response: acceptance(commandId, leave.acceptedRevision, true) };
@@ -212,9 +286,9 @@ export class GameRoom extends RealtimeRoom {
       return { code: 'NOT_MEMBER' };
     }
     if (!this.supports(room)) return { code: 'ROOM_INCOMPATIBLE' };
-    if (room.lifecycle === 'EXPIRED') return { code: 'ROOM_EXPIRED' };
     const game = this.loadGame(room);
     if (game && !this.supports(game)) return { code: 'ROOM_INCOMPATIBLE' };
+    if (this.expired(room, now)) return { code: 'ROOM_EXPIRED' };
 
     const sql = this.ctx.storage.sql;
     const receipt = this.receipt(userId, commandId);
@@ -226,7 +300,6 @@ export class GameRoom extends RealtimeRoom {
       return { response: receipt.kind === 'leave' ? recorded : { ...recorded, snapshot: this.snapshot(room, game) } };
     }
     if (expectedVersion !== room.revision) return { code: 'STALE_VERSION', currentVersion: room.revision };
-    const now = Date.now();
     const timestamp = new Date(now).toISOString();
     const revision = room.revision + 1;
     if (isLobbyCommand(command)) {
@@ -267,10 +340,11 @@ export class GameRoom extends RealtimeRoom {
     return this.commit(() => {
       if (!this.compatible) return { code: this.mayReportIncompatibility(userId) ? 'ROOM_INCOMPATIBLE' : 'NOT_MEMBER' };
       const room = this.room();
-      if (!room) return { code: 'ROOM_NOT_FOUND' };
+      if (!room) return { code: this.missingRoom() };
+      const now = Date.now();
       if (!this.hasMember(userId)) return { code: 'NOT_MEMBER' };
       if (!this.supports(room)) return { code: 'ROOM_INCOMPATIBLE' };
-      if (room.lifecycle === 'EXPIRED') return { code: 'ROOM_EXPIRED' };
+      if (this.expired(room, now)) return { code: 'ROOM_EXPIRED' };
       if (room.ownerUserId !== userId) return { code: 'NOT_OWNER' };
       const receipt = this.receipt(userId, commandId);
       if (receipt) {
@@ -280,7 +354,6 @@ export class GameRoom extends RealtimeRoom {
       }
       if (expectedVersion !== room.revision) return { code: 'STALE_VERSION', currentVersion: room.revision };
       if (room.lifecycle !== 'LOBBY') return { code: 'ROOM_STARTED' };
-      const now = Date.now();
       const revision = room.revision + 1;
       this.writeLobby(room, revision, now, room.ownerUserId, false, inviteHash);
       this.recordEvents([{ type: 'INVITE_ROTATED', userId }], revision, new Date(now).toISOString());
@@ -297,10 +370,11 @@ export class GameRoom extends RealtimeRoom {
     return this.commit(() => {
       if (!this.compatible) return { code: this.mayReportIncompatibility(userId) ? 'ROOM_INCOMPATIBLE' : 'INVALID_INVITE' };
       const room = this.room();
-      if (!room) return { code: 'ROOM_NOT_FOUND' };
+      if (!room) return { code: this.missingRoom() };
+      const now = Date.now();
       const isMember = this.hasMember(userId);
       if (!this.supports(room)) return { code: isMember ? 'ROOM_INCOMPATIBLE' : 'INVALID_INVITE' };
-      if (room.lifecycle === 'EXPIRED') return { code: 'ROOM_EXPIRED' };
+      if (this.expired(room, now)) return { code: 'ROOM_EXPIRED' };
       const receipt = this.receipt(userId, commandId);
       if (receipt) {
         if (!isMember) return { code: 'NOT_MEMBER' };
@@ -318,7 +392,6 @@ export class GameRoom extends RealtimeRoom {
       const members = this.members();
       const seat = [0, 1, 2, 3].find(candidate => !members.some(member => member.seat === candidate));
       if (seat === undefined) return { code: 'ROOM_FULL' };
-      const now = Date.now();
       const timestamp = new Date(now).toISOString();
       const revision = room.revision + 1;
       const sql = this.ctx.storage.sql;
@@ -351,7 +424,7 @@ export class GameRoom extends RealtimeRoom {
     const lifecycle = abandoned ? 'EXPIRED' : 'LOBBY';
     this.ctx.storage.sql.exec(`UPDATE room SET ownerUserId = ?, lifecycle = ?, inviteHash = ?, revision = ?,
       lastMutationAt = ?, expiresAt = ? WHERE singleton = 1`, ownerUserId, lifecycle, abandoned ? null : inviteHash,
-    revision, new Date(now).toISOString(), new Date(now + (abandoned ? 0 : 7 * DAY_MS)).toISOString());
+    revision, new Date(now).toISOString(), new Date(now + (abandoned ? ABANDONED_RECEIPT_MS : 7 * DAY_MS)).toISOString());
     return lifecycle;
   }
 
@@ -370,11 +443,11 @@ export class GameRoom extends RealtimeRoom {
   }
 
   /** Trusted room code only. There is no HTTP endpoint for submitting a snapshot. */
-  protected persistGame(game: GameState): void {
+  protected async persistGame(game: GameState): Promise<void> {
     assertGameInvariants(game);
     this.ctx.storage.transactionSync(() => {
       const room = this.compatible && this.room();
-      if (!room || !this.supports(room) || room.lifecycle === 'EXPIRED') throw new Error('Room data is unavailable');
+      if (!room || !this.supports(room) || this.expired(room)) throw new Error('Room data is unavailable');
       const members = this.members();
       if (members.length !== game.players.length || members.some((member, index) => {
         const player = game.players[index]!;
@@ -382,5 +455,6 @@ export class GameRoom extends RealtimeRoom {
       })) throw new Error('Game roster differs from room membership');
       this.writeGame(game, room.revision + 1, Date.now());
     });
+    await this.scheduleExpiry();
   }
 }

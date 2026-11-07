@@ -5,7 +5,7 @@ type Intent<T = CommandEnvelope> = T extends CommandEnvelope ? Pick<T, 'type' | 
 type Socket = Pick<WebSocket, 'onclose' | 'onerror' | 'onmessage' | 'close'>;
 type Failure = { ok: false; code: string; message: string };
 type Submission = Failure | { ok: true; receipt: CommandReceipt };
-type ConnectionEnd = 'access-ended' | 'replaced' | 'session-expired';
+type ConnectionEnd = 'access-ended' | 'room-expired' | 'replaced' | 'session-expired';
 type State = { readonly online: boolean; readonly snapshot: PublicRoomSnapshot | null; readonly ended?: ConnectionEnd };
 
 interface TransportOptions {
@@ -121,7 +121,7 @@ export class RoomTransport {
   private update(online: boolean, snapshot?: PublicRoomSnapshot, reason?: ConnectionEnd | null): void {
     const current = this.state.snapshot;
     const ended = online || reason === null ? undefined : reason ?? this.state.ended;
-    const latest = ended === 'access-ended' ? null
+    const latest = ended === 'access-ended' || ended === 'room-expired' ? null
       : snapshot && (!current || snapshot.revision > current.revision) ? snapshot : current;
     if (online === this.state.online && latest === current && ended === this.state.ended) return;
     this.state = { online, snapshot: latest, ...(ended ? { ended } : {}) };
@@ -143,6 +143,10 @@ export class RoomTransport {
         const response = await this.request('/ws-ticket', signal, this.forceRefresh, { method: 'POST' });
         if (signal.aborted) return;
         this.forceRefresh = response.status === 401;
+        if (response.status === 410 || response.status === 404 || response.status === 403) {
+          this.stopConnection(response.status === 410 ? 'room-expired' : 'access-ended');
+          return;
+        }
         if (!response.ok) throw new Error('Socket ticket request failed');
         const body = record(await response.json());
         if (typeof body?.ticket !== 'string' || !/^[0-9a-f]{64}$/.test(body.ticket)) throw new Error('Invalid socket ticket');
@@ -175,6 +179,7 @@ export class RoomTransport {
       signal.addEventListener('abort', finish, { once: true });
       socket.onclose = event => {
         if (event.reason === 'Connection replaced') this.stopConnection('replaced');
+        else if (event.reason === 'Room expired') this.stopConnection('room-expired');
         else if (event.reason === 'Room access ended') this.stopConnection('access-ended');
         else {
           if (event.reason === 'Session expired') this.forceRefresh = true;
@@ -237,7 +242,9 @@ export class RoomTransport {
             if (signal.aborted) return OFFLINE;
             if (!response.ok) {
               const failure = errorFrom(value);
-              if (failure.code === 'STALE_VERSION') await this.refreshSnapshot(signal);
+              if (failure.code === 'ROOM_EXPIRED') this.stopConnection('room-expired');
+              else if (failure.code === 'ROOM_NOT_FOUND' || failure.code === 'NOT_MEMBER') this.stopConnection('access-ended');
+              else if (failure.code === 'STALE_VERSION') await this.refreshSnapshot(signal);
               return failure;
             }
             const ack = record(value);
@@ -267,6 +274,11 @@ export class RoomTransport {
   private async refreshSnapshot(signal: AbortSignal): Promise<void> {
     try {
       const response = await this.request('', signal, false);
+      if (signal.aborted) return;
+      if (response.status === 410 || response.status === 404 || response.status === 403) {
+        this.stopConnection(response.status === 410 ? 'room-expired' : 'access-ended');
+        return;
+      }
       if (!response.ok) return;
       const snapshot = parseSnapshot(await response.json(), this.roomId);
       if (snapshot && !signal.aborted) this.update(this.state.online, snapshot);

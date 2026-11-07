@@ -47,7 +47,7 @@ export function ConnectedRoom({ auth, uid, roomId, signOut, signOutBusy, signOut
   const inviteInput = useRef<HTMLInputElement | null>(null);
   const [snapshot, setSnapshot] = useState<PublicRoomSnapshot | null>(null);
   const [online, setOnline] = useState(false);
-  const [ended, setEnded] = useState<'access-ended' | 'replaced' | 'session-expired' | null>(null);
+  const [ended, setEnded] = useState<'access-ended' | 'room-expired' | 'replaced' | 'session-expired' | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const [inviteLink, setInviteLink] = useState('');
@@ -66,7 +66,7 @@ export function ConnectedRoom({ auth, uid, roomId, signOut, signOutBusy, signOut
         if (signal.aborted) return;
         setOnline(state.online);
         setEnded(state.ended ?? null);
-        if (state.ended === 'access-ended') {
+        if (state.ended === 'access-ended' || state.ended === 'room-expired') {
           accessEnded.current = true;
           setSnapshot(null);
           setInviteLink('');
@@ -79,6 +79,12 @@ export function ConnectedRoom({ auth, uid, roomId, signOut, signOutBusy, signOut
     void (async () => {
       try {
         const response = await roomRequest(auth, uid, path, undefined, signal);
+        if (signal.aborted) return;
+        if (response.status === 410 || response.status === 404) {
+          forgetRoom(uid, roomId);
+          setEnded(response.status === 410 ? 'room-expired' : 'access-ended');
+          return;
+        }
         if (!response.ok) throw new Error('Room unavailable');
         const initial = await response.json() as PublicRoomSnapshot;
         if (signal.aborted) return;
@@ -164,6 +170,7 @@ export function ConnectedRoom({ auth, uid, roomId, signOut, signOutBusy, signOut
   const banner = <header>
     <p>Signed in.</p>
     <p role="status">{online ? pending ? 'Submitting action…' : 'Connected to room'
+      : ended === 'room-expired' ? 'This room expired.'
       : ended === 'access-ended' ? 'Your access to this room ended.'
       : ended === 'replaced' ? 'This connection was replaced. Reload to reconnect.'
       : ended === 'session-expired' ? 'Session expired. Reconnecting…' : 'Connecting to room… Actions unavailable.'}</p>

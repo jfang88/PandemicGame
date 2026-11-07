@@ -43,6 +43,8 @@ function sendSnapshot(socket: WebSocket, snapshot: PublicRoomSnapshot): void {
 
 export abstract class RealtimeRoom extends DurableObject<Env> {
   protected abstract readonly compatible: boolean;
+  protected abstract retentionDeadline(now: number): number;
+  protected abstract expireRetention(now: number): boolean;
   abstract read(userId: string): { snapshot: PublicRoomSnapshot } | { code: ErrorCode };
 
   async issueSocketTicket(userId: string, origin: string, authExpiresAt: number) {
@@ -123,13 +125,13 @@ export abstract class RealtimeRoom extends DurableObject<Env> {
     return active;
   }
 
-  private scheduleExpiry(): Promise<void> {
+  protected scheduleExpiry(): Promise<void> {
     const now = Date.now();
     const { next } = this.ctx.storage.sql.exec<{ next: number | null }>(
       'SELECT MIN(expiresAt) AS next FROM socket_tickets',
     ).one();
     const deadline = this.activeSockets(now).reduce(
-      (earliest, { data }) => Math.min(earliest, data.authExpiresAt), next ?? Infinity,
+      (earliest, { data }) => Math.min(earliest, data.authExpiresAt), Math.min(next ?? Infinity, this.retentionDeadline(now)),
     );
     // Invoke the alarm operation before yielding so later calls cannot overwrite it with stale data.
     return Number.isFinite(deadline) ? this.ctx.storage.setAlarm(Math.max(now, deadline)) : this.ctx.storage.deleteAlarm();
@@ -137,7 +139,12 @@ export abstract class RealtimeRoom extends DurableObject<Env> {
 
   async alarm(): Promise<void> {
     if (!this.compatible) return;
-    this.ctx.storage.sql.exec('DELETE FROM socket_tickets WHERE expiresAt <= ?', Date.now());
+    const now = Date.now();
+    const expired = this.expireRetention(now);
+    this.ctx.storage.sql.exec('DELETE FROM socket_tickets WHERE expiresAt <= ?', now);
+    if (expired) {
+      for (const socket of this.ctx.getWebSockets()) close(socket, 1008, 'Room expired');
+    }
     await this.scheduleExpiry();
   }
 
@@ -146,7 +153,7 @@ export abstract class RealtimeRoom extends DurableObject<Env> {
     for (const { socket, data } of this.activeSockets(Date.now())) {
       const access = this.read(data.userId);
       if ('code' in access) {
-        close(socket, 1008, 'Room access ended');
+        close(socket, 1008, access.code === 'ROOM_EXPIRED' ? 'Room expired' : 'Room access ended');
         continue;
       }
       if (data.authExpiresAt <= Date.now()) {

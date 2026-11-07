@@ -59,7 +59,7 @@ Create uses a client-generated cryptographically random UUID as an idempotency/r
 
 Join requires auth and valid invite secret, and has an atomic max-four check. Existing member rejoin is idempotent. Invite rotation invalidates old invitations. Started games lock membership. Empty lobby is marked abandoned; disconnect alone is not leave. Terminal games retained 30 days; lobbies expire after 7 days without accepted mutation; running games after 30 days without accepted gameplay mutation. Read/socket activity does not extend retention.
 
-Cleanup alarm removes state, tickets and receipts and leaves a small expired tombstone for 30 additional days; after final deletion old links may return 404. No indefinite host lease and no global singleton coordinating unrelated rooms.
+The cleanup alarm removes state, tickets and receipts and leaves a small expired tombstone for 30 additional days. After that, read and join return 404. A marker with no room data or expiry timestamp reserves the retired UUID inside its existing Durable Object so an old create retry cannot recreate it. The last lobby member's leave makes the room unavailable immediately and retains the exact leave retry for up to one minute before cleanup. No indefinite host lease and no global singleton coordinating unrelated rooms.
 
 ## Deployment constraints
 
