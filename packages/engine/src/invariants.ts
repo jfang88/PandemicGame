@@ -9,19 +9,17 @@ function integer(value: number, min: number, max: number): boolean {
   return Number.isInteger(value) && value >= min && value <= max;
 }
 function sameCards(actual: readonly string[], expected: readonly string[], label: string): void {
+  const expectedSet = new Set(expected);
   invariant(actual.length === expected.length && new Set(actual).size === expected.length
-    && actual.every(card => expected.includes(card)), `${label} conservation`);
+    && actual.every(card => expectedSet.has(card)), `${label} conservation`);
 }
-/** Structural/conservation checks for internal snapshots.
- * T06 audits all rules.
- * Automatic resolvers must restore removed cards before calling.
- */
+const ids = loadBoard().locations.map(location => location.id);
+
+/** Check structural and conservation invariants at the command boundary. */
 export function assertGameInvariants(state: GameState): void {
   invariant(state.schemaVersion === 1 && state.rulesVersion === RULES_VERSION
     && state.boardVersion === BOARD_VERSION, 'versions');
   validateSeed(state.rngState);
-  const board = loadBoard();
-  const ids = board.locations.map(location => location.id);
   invariant(state.players.length >= 2 && state.players.length <= 4, 'player count');
   for (const key of ['userId', 'seat', 'role'] as const) {
     invariant(new Set(state.players.map(player => player[key])).size === state.players.length, `unique ${key}`);
@@ -53,7 +51,7 @@ export function assertGameInvariants(state: GameState): void {
     && state.players.every(player => player.hand.every(card => card.startsWith('p:'))), 'location-only hands/discard');
   sameCards(playerCards.filter(card => !card.startsWith('e:')), ids.map(id => `p:${id}`), 'player location cards');
   sameCards([...playerCards.filter(card => card.startsWith('e:')), ...state.resolvedEpidemics], ['e:1', 'e:2', 'e:3', 'e:4'], 'epidemics');
-  invariant(['ACTIONS', 'DRAW', 'DISCARD_REQUIRED', 'INFECTION', 'WON', 'LOST'].includes(state.phase), 'phase');
+  invariant(['ACTIONS', 'DISCARD_REQUIRED', 'WON', 'LOST'].includes(state.phase), 'settled phase');
   invariant((state.phase === 'DISCARD_REQUIRED') === (state.continuation !== null), 'continuation phase');
   const overLimit = state.players.filter(player => player.hand.length > 7);
   if (state.continuation) {
@@ -61,14 +59,30 @@ export function assertGameInvariants(state: GameState): void {
     invariant(overLimit.length === 1 && overLimit[0]?.userId === userId, 'pending discard owner');
     if (resume.phase === 'ACTIONS') {
       invariant(integer(resume.actionsRemaining, 1, 3) && resume.actionsRemaining === state.actionsRemaining, 'resume actions');
+      invariant(overLimit[0].seat !== state.activeSeat, 'transfer recipient');
     } else {
-      invariant(integer(resume.drawsRemaining, 0, 2) && state.actionsRemaining === 0, 'resume draw');
+      invariant(resume.phase === 'DRAW' && integer(resume.drawsRemaining, 0, 2) && state.actionsRemaining === 0, 'resume draw');
+      invariant((overLimit[0].seat === state.activeSeat) === (resume.drawsRemaining < 2), 'draw discard owner');
     }
   } else {
     invariant(overLimit.length === 0, 'hand limit');
   }
   invariant((state.phase === 'WON' || state.phase === 'LOST') === (state.outcome !== null), 'outcome phase');
+  invariant(COLORS.every(color => state.cured[color]) === (state.phase === 'WON'), 'fourth cure ends game');
+  const loss = state.outcome?.kind === 'lost' ? state.outcome : null;
+  invariant((state.outbreakCount === 8) === (loss?.reason === 'OUTBREAK_LIMIT'), 'outbreak limit ends game');
   if (state.phase === 'ACTIONS') invariant(state.actionsRemaining >= 1, 'action phase budget');
-  if (state.phase === 'WON') invariant(state.outcome?.kind === 'won' && COLORS.every(color => state.cured[color]), 'win');
-  if (state.phase === 'LOST') invariant(state.outcome?.kind === 'lost', 'loss');
+  if (state.phase === 'WON') invariant(state.outcome?.kind === 'won', 'win');
+  if (state.phase === 'LOST') {
+    invariant(loss && state.actionsRemaining === 0, 'loss');
+    switch (loss.reason) {
+      case 'OUTBREAK_LIMIT': break;
+      case 'PLAYER_DECK_EMPTY': invariant(state.playerDeck.length === 0, 'empty player deck loss'); break;
+      case 'CUBE_SUPPLY_EXHAUSTED':
+        invariant(state.supply[loss.color] === 0 && ids.includes(loss.locationId)
+          && state.cubes[loss.locationId]![loss.color] < 3, 'cube supply loss');
+        break;
+      default: invariant(false, 'loss reason');
+    }
+  }
 }

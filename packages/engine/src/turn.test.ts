@@ -156,6 +156,47 @@ describe('automatic draw and infection', () => {
     expect(state.infectionDeck).toEqual(base.infectionDeck);
   });
 
+  it('loses before infection when a discard resumes a missing second draw', () => {
+    const base = fixture({ playerDeck: ['p:A01'],
+      hand: ['p:B01', 'p:B02', 'p:B03', 'p:B04', 'p:B05', 'p:B06', 'p:B07'],
+    });
+    const paused = resolve(base).state;
+    expect(paused.continuation).toEqual({ userId: 'first', resume: { phase: 'DRAW', drawsRemaining: 1 } });
+    const { state } = resolve(paused, { type: 'DISCARD', payload: { cardIds: ['p:A01'] } });
+    expect(state.outcome).toEqual({ kind: 'lost', reason: 'PLAYER_DECK_EMPTY' });
+    expect(state.infectionDeck).toEqual(base.infectionDeck);
+  });
+
+  it('stops a normal outbreak at eight and keeps later infection cards untouched', () => {
+    const base = fixture({ blue: { A01: 3 }, outbreakCount: 7, infectionTop: ['i:A01', 'i:A02'] });
+    const { state } = resolve(base);
+    expect(state.outcome).toEqual({ kind: 'lost', reason: 'OUTBREAK_LIMIT' });
+    expect(state.cubes).toEqual(base.cubes);
+    expect(state.infectionDiscard).toEqual(['i:A01']);
+    expect(state.infectionDeck[0]).toBe('i:A02');
+  });
+
+  it('retains both drawn cards when an epidemic exhausts supply before intensification', () => {
+    const base = fixture({
+      blue: { B01: 3, B02: 3, B03: 3, B04: 3, C01: 3, C02: 3, C03: 3, C04: 3 },
+      playerDeck: ['e:1', 'p:A01'], infectionBottom: ['i:A01'], infectionDiscard: ['i:A02'],
+    });
+    const { state } = resolve(base);
+    expect(state.outcome).toEqual({ kind: 'lost', reason: 'CUBE_SUPPLY_EXHAUSTED', color: 'blue', locationId: 'A01' });
+    expect(state.resolvedEpidemics).toContain('e:1');
+    expect(state.infectionDiscard).toEqual(['i:A01', 'i:A02']);
+    expect(state.playerDeck).toEqual(['p:A01']);
+    expect(state.rngState).toBe(1);
+  });
+
+  it('caps the epidemic rate index and draws four infection cards', () => {
+    const base = fixture({ playerDeck: ['e:1', 'p:A01'], rateIndex: 6, infectionBottom: ['i:A01'] });
+    const { state } = resolve(base);
+    expect(state.phase).toBe('ACTIONS');
+    expect(state.rateIndex).toBe(6);
+    expect(state.infectionDiscard).toHaveLength(4);
+  });
+
   it('E22 infects cured locations even when the Medic is present', () => {
     const base = fixture({ infectionTop: ['i:A01', 'i:A02'] });
     const cured = { ...base.cured, blue: true };
@@ -184,5 +225,20 @@ describe('automatic draw and infection', () => {
     const before = JSON.stringify(state);
     expect(() => applyCommand(state, 'first', pass)).toThrow('no infection cards to draw');
     expect(JSON.stringify(state)).toBe(before);
+  });
+});
+
+describe('settled snapshot invariants', () => {
+  it.each(['DRAW', 'INFECTION'] as const)('rejects intermediate %s', phase => {
+    expect(() => assertGameInvariants({ ...fixture(), phase, actionsRemaining: 0 })).toThrow('settled phase');
+  });
+
+  it('rejects unsettled cures and outbreaks, and a loss with cards left', () => {
+    const base = fixture();
+    expect(() => assertGameInvariants({ ...base, cured: { blue: true, yellow: true, red: true, black: true } }))
+      .toThrow('fourth cure ends game');
+    expect(() => assertGameInvariants({ ...base, outbreakCount: 8 })).toThrow('outbreak limit ends game');
+    expect(() => assertGameInvariants({ ...base, phase: 'LOST', actionsRemaining: 0,
+      outcome: { kind: 'lost', reason: 'PLAYER_DECK_EMPTY' } })).toThrow('empty player deck loss');
   });
 });

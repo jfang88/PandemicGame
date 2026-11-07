@@ -5,8 +5,9 @@ T01 is **done**: [PR #22](https://github.com/jfang88/PandemicGame/pull/22) merge
 T02 is **done**: [PR #23](https://github.com/jfang88/PandemicGame/pull/23) merged with passing CI.
 T03 is **done**. [PR #24](https://github.com/jfang88/PandemicGame/pull/24) merged with [passing CI](https://github.com/jfang88/PandemicGame/actions/runs/42334094921).
 T04 is **done**. [PR #25](https://github.com/jfang88/PandemicGame/pull/25) merged with [passing CI](https://github.com/jfang88/PandemicGame/actions/runs/42356430404).
-T05 is **in review**. See the [T05 task](docs/tasks/T05-draw-infection-epidemics-and-losses.md) for evidence.
-T06–T18 are **not started**. Dependencies are authoritative; merge reviewed work before
+T05 is **done**. [PR #26](https://github.com/jfang88/PandemicGame/pull/26) merged with [passing CI](https://github.com/jfang88/PandemicGame/actions/runs/42357187273).
+T06 is **in review**. See the [engine gate report](docs/evidence/T06.md).
+T07–T18 are **not started**. Dependencies are authoritative; merge reviewed work before
 starting its dependents. The first parallel task split is T07 (backend) and T12 (local UI),
 after T06 merges. Independent reference calculations and read-only review can run alongside implementation.
 
@@ -16,8 +17,8 @@ after T06 merges. Independent reference calculations and read-only review can ru
 | T02: State types and deterministic setup | T01 | done | [Task prompt](docs/tasks/T02-state-types-and-deterministic-setup.md) | [#2](https://github.com/jfang88/PandemicGame/issues/2) |
 | T03: Movement treatment and construction | T02 | done | [Task prompt](docs/tasks/T03-movement-treatment-and-construction.md) | [#3](https://github.com/jfang88/PandemicGame/issues/3) |
 | T04: Sharing cures and discard continuations | T03 | done | [Task prompt](docs/tasks/T04-sharing-cures-and-discard-continuations.md) | [#4](https://github.com/jfang88/PandemicGame/issues/4) |
-| T05: Draw infection epidemics and losses | T04 | in review | [Task prompt](docs/tasks/T05-draw-infection-epidemics-and-losses.md) | [#5](https://github.com/jfang88/PandemicGame/issues/5) |
-| T06: Engine invariants and independent rules review | T05 | not started | [Task prompt](docs/tasks/T06-engine-invariants-and-independent-rules-review.md) | [#6](https://github.com/jfang88/PandemicGame/issues/6) |
+| T05: Draw infection epidemics and losses | T04 | done | [Task prompt](docs/tasks/T05-draw-infection-epidemics-and-losses.md) | [#5](https://github.com/jfang88/PandemicGame/issues/5) |
+| T06: Engine invariants and independent rules review | T05 | in review | [Task prompt](docs/tasks/T06-engine-invariants-and-independent-rules-review.md) | [#6](https://github.com/jfang88/PandemicGame/issues/6) |
 | T07: Room persistence and protocol schemas | T06 | not started | [Task prompt](docs/tasks/T07-room-persistence-and-protocol-schemas.md) | [#7](https://github.com/jfang88/PandemicGame/issues/7) |
 | T08: Atomic command execution and retry safety | T07 | not started | [Task prompt](docs/tasks/T08-atomic-command-execution-and-retry-safety.md) | [#8](https://github.com/jfang88/PandemicGame/issues/8) |
 | T09: Private lobby invites and membership | T08 | not started | [Task prompt](docs/tasks/T09-private-lobby-invites-and-membership.md) | [#9](https://github.com/jfang88/PandemicGame/issues/9) |
