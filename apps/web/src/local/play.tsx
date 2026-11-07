@@ -49,10 +49,11 @@ function choiceLabel(command: ActionCommand, game: GameView) {
   }
 }
 
-function ActionControls({ game, choices, submit }: {
+function ActionControls({ game, choices, submit, disabled }: {
   game: GameView;
   choices: readonly ActionCommand[];
   submit(command: ActionCommand): void;
+  disabled: boolean;
 }) {
   const [selectedType, setSelectedType] = useState<ActionCommand['type']>('MOVE');
   const [selectedChoice, setSelectedChoice] = useState('');
@@ -71,7 +72,7 @@ function ActionControls({ game, choices, submit }: {
 
   return <div className="action-controls">
     <label className="field">Action
-      <select ref={actionSelect} value={type} onChange={event => {
+      <select ref={actionSelect} disabled={disabled} value={type} onChange={event => {
         setSelectedType(event.target.value as ActionCommand['type']);
         setSelectedChoice('');
       }}>
@@ -80,18 +81,20 @@ function ActionControls({ game, choices, submit }: {
     </label>
     <p>{actions[type][1]} Every listed action costs one action.</p>
     {type !== 'PASS' && type !== 'BUILD_CENTER' && <label className="field">Choice
-      <select value={labels[index]} onChange={event => setSelectedChoice(event.target.value)}>
+      <select disabled={disabled} value={labels[index]} onChange={event => setSelectedChoice(event.target.value)}>
         {labels.map(label => <option key={label}>{label}</option>)}
       </select>
     </label>}
-    <button type="button" onClick={() => submit(options[index]!)}>{actions[type][0]}</button>
+    <button type="button" disabled={disabled} onClick={() => submit(options[index]!)}>{actions[type][0]}</button>
   </div>;
 }
 
-function DiscardDialog({ game, choices, submit }: {
+function DiscardDialog({ game, choices, submit, disabled, error }: {
   game: GameView;
   choices: readonly ActionCommand[];
   submit(command: ActionCommand): void;
+  disabled: boolean;
+  error: string;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -109,10 +112,11 @@ function DiscardDialog({ game, choices, submit }: {
   return <dialog ref={dialog} aria-labelledby="discard-heading" onCancel={event => event.preventDefault()}>
     <h2 id="discard-heading">{playerName(owner.seat)} must discard</h2>
     <p>Choose a discard that leaves exactly seven cards. Play resumes automatically.</p>
+    {error && <p role="alert">{error}</p>}
     <div className="discard-options">
       {choices.map(choice => {
         const label = `Discard ${choiceLabel(choice, game)}`;
-        return <button key={label} type="button" onClick={() => submit(choice)}>{label}</button>;
+        return <button key={label} type="button" disabled={disabled} onClick={() => submit(choice)}>{label}</button>;
       })}
     </div>
   </dialog>;
@@ -126,12 +130,13 @@ function lossMessage(outcome: Extract<NonNullable<GameView['outcome']>, { kind: 
   }
 }
 
-export function GameScreen({ game, choices, error, submit, onRestart }: {
+export function GameScreen({ game, choices, error, submit, onRestart, disabled = false }: {
   game: GameView;
   choices: readonly ActionCommand[];
   error: string;
   submit(command: ActionCommand): void;
-  onRestart(): void;
+  onRestart?(): void;
+  disabled?: boolean;
 }) {
   const status = useRef<HTMLHeadingElement>(null);
   const active = game.players.find(player => player.seat === game.activeSeat)!;
@@ -142,8 +147,8 @@ export function GameScreen({ game, choices, error, submit, onRestart }: {
 
   return <main className="play-shell">
     <header className="game-heading">
-      <div><p className="eyebrow">LOCAL HOT-SEAT GAME</p><h1>PandemicGame</h1></div>
-      {game.outcome && <button type="button" onClick={onRestart}>New local game</button>}
+      <div><p className="eyebrow">{onRestart ? 'LOCAL HOT-SEAT GAME' : 'PRIVATE ROOM'}</p><h1>PandemicGame</h1></div>
+      {game.outcome && onRestart && <button type="button" onClick={onRestart}>New local game</button>}
     </header>
     <section className="status-banner" aria-labelledby="status-heading">
       <h2 id="status-heading" tabIndex={-1} ref={status}>
@@ -161,9 +166,10 @@ export function GameScreen({ game, choices, error, submit, onRestart }: {
       <aside aria-label="Turn and threat controls">
         {game.phase === 'ACTIONS' && <section aria-labelledby="actions-heading">
           <h2 id="actions-heading">Legal actions</h2>
-          <ActionControls key={game.activeSeat} game={game} choices={choices} submit={submit} />
+          {choices.length ? <ActionControls key={game.activeSeat} game={game} choices={choices} submit={submit} disabled={disabled} />
+            : <p>No actions available to you right now.</p>}
         </section>}
-        {error && <p role="alert">{error}</p>}
+        {error && !(game.discardOwner && choices.length) && <p role="alert">{error}</p>}
         <section aria-labelledby="threat-heading">
           <h2 id="threat-heading">Threat tracker</h2>
           <dl className="stats">
@@ -193,6 +199,8 @@ export function GameScreen({ game, choices, error, submit, onRestart }: {
         </article>)}
       </div>
     </section>
-    {game.discardOwner && <DiscardDialog key={game.discardOwner} game={game} choices={choices} submit={submit} />}
+    {game.discardOwner && (choices.length
+      ? <DiscardDialog key={game.discardOwner} game={game} choices={choices} submit={submit} disabled={disabled} error={error} />
+      : <p role="status">{playerName(game.players.find(player => player.userId === game.discardOwner)!.seat)} must discard.</p>)}
   </main>;
 }

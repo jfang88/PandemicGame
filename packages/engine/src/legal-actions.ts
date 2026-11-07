@@ -18,7 +18,10 @@ function* cardChoices(cards: readonly LocationCardId[], count: number): Generato
 }
 
 /** Enumerate each legal choice once for the given actor, using hand order for card payments. */
-export function listLegalActions(state: GameState, actorId: string): readonly ActionCommand[] {
+type LegalActionState = Pick<GameState, 'phase' | 'players' | 'activeSeat' | 'actionsRemaining' | 'centers' | 'cubes' | 'cured'>
+  & { readonly continuation: { readonly userId: string } | null };
+
+export function listLegalActions(state: LegalActionState, actorId: string): readonly ActionCommand[] {
   const actor = state.players.find(player => player.userId === actorId);
   if (!actor) return [];
   if (state.phase === 'DISCARD_REQUIRED') {

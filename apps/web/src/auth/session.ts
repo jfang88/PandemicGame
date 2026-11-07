@@ -26,6 +26,19 @@ export function safeReturnPath(path: string | null): string | null {
   return room ? `/${room.kind}/${room.id}` : null;
 }
 
+export function pastedInvitePath(value: string): string | null {
+  try {
+    const url = new URL(value.trim(), location.origin);
+    const room = roomPath(url.pathname);
+    const params = new URLSearchParams(url.hash.slice(1));
+    const secret = params.get('invite');
+    if (url.origin !== location.origin || room?.kind !== 'join' || params.size !== 1 || !secret || !INVITE.test(secret)) {
+      return null;
+    }
+    return `/join/${room.id}#${new URLSearchParams({ invite: secret })}`;
+  } catch { return null; }
+}
+
 export interface PendingInvite {
   readonly roomId: string;
   readonly secret: string;

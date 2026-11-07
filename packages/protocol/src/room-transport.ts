@@ -5,7 +5,8 @@ type Intent<T = CommandEnvelope> = T extends CommandEnvelope ? Pick<T, 'type' | 
 type Socket = Pick<WebSocket, 'onclose' | 'onerror' | 'onmessage' | 'close'>;
 type Failure = { ok: false; code: string; message: string };
 type Submission = Failure | { ok: true; receipt: CommandReceipt };
-type State = { readonly online: boolean; readonly snapshot: PublicRoomSnapshot | null };
+type ConnectionEnd = 'access-ended' | 'replaced' | 'session-expired';
+type State = { readonly online: boolean; readonly snapshot: PublicRoomSnapshot | null; readonly ended?: ConnectionEnd };
 
 interface TransportOptions {
   readonly roomId: string;
@@ -38,7 +39,7 @@ function wait(milliseconds: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-function tokenBeforeDeadline(getToken: () => Promise<string>, signal: AbortSignal): Promise<string> {
+export function tokenBeforeDeadline(getToken: () => Promise<string>, signal: AbortSignal): Promise<string> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) { reject(signal.reason); return; }
     const aborted = () => reject(signal.reason);
@@ -98,6 +99,7 @@ export class RoomTransport {
     if (this.controller) return;
     const controller = new AbortController();
     this.controller = controller;
+    if (this.state.ended) this.update(false, undefined, null);
     void this.reconnect(controller.signal).catch(() => {
       if (this.controller === controller) this.stop();
     });
@@ -109,18 +111,20 @@ export class RoomTransport {
     this.submission = null;
   }
 
-  private stopConnection(): void {
+  private stopConnection(reason?: ConnectionEnd): void {
     const controller = this.controller;
     this.controller = null;
     controller?.abort();
-    this.update(false);
+    this.update(false, undefined, reason);
   }
 
-  private update(online: boolean, snapshot?: PublicRoomSnapshot): void {
+  private update(online: boolean, snapshot?: PublicRoomSnapshot, reason?: ConnectionEnd | null): void {
     const current = this.state.snapshot;
-    const latest = snapshot && (!current || snapshot.revision > current.revision) ? snapshot : current;
-    if (online === this.state.online && latest === current) return;
-    this.state = { online, snapshot: latest };
+    const ended = online || reason === null ? undefined : reason ?? this.state.ended;
+    const latest = ended === 'access-ended' ? null
+      : snapshot && (!current || snapshot.revision > current.revision) ? snapshot : current;
+    if (online === this.state.online && latest === current && ended === this.state.ended) return;
+    this.state = { online, snapshot: latest, ...(ended ? { ended } : {}) };
     this.options.onChange(this.state);
   }
 
@@ -170,7 +174,8 @@ export class RoomTransport {
       const deadline = setTimeout(finish, REQUEST_TIMEOUT);
       signal.addEventListener('abort', finish, { once: true });
       socket.onclose = event => {
-        if (event.reason === 'Connection replaced' || event.reason === 'Room access ended') this.stopConnection();
+        if (event.reason === 'Connection replaced') this.stopConnection('replaced');
+        else if (event.reason === 'Room access ended') this.stopConnection('access-ended');
         else {
           if (event.reason === 'Session expired') this.forceRefresh = true;
           finish();
@@ -184,6 +189,7 @@ export class RoomTransport {
         if (message?.type === 'session_expired') {
           this.forceRefresh = true;
           finish();
+          this.update(false, undefined, 'session-expired');
           return;
         }
         if (message?.type !== 'snapshot' || message.protocolVersion !== PROTOCOL_VERSION) return;
@@ -197,10 +203,13 @@ export class RoomTransport {
     });
   }
 
-  async submit(intent: Intent): Promise<Submission> {
+  async submit(intent: Intent, renderedRevision?: number): Promise<Submission> {
     const connection = this.controller;
     const { online, snapshot } = this.state;
     if (!connection || connection.signal.aborted || !online || !snapshot) return OFFLINE;
+    if (renderedRevision !== undefined && renderedRevision !== snapshot.revision) {
+      return { ok: false, code: 'STALE_VERSION', message: 'The room changed. Choose an action again.' };
+    }
     if (this.submission) return { ok: false, code: 'BUSY', message: 'A command is still being submitted.' };
     const commandId = (this.options.commandId ?? (() => crypto.randomUUID()))();
     const body = JSON.stringify({ protocolVersion: PROTOCOL_VERSION, commandId,
