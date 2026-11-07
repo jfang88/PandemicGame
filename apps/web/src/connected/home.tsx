@@ -22,7 +22,7 @@ export function RoomHome({ auth, uid }: { auth: AuthAdapter; uid: string }) {
     setError('');
     try {
       const response = await roomRequest(auth, uid, '/api/rooms', { roomId }, signal);
-      if (response.status === 409) intent.current = null;
+      if (response.status === 409 || response.status === 410) intent.current = null;
       if (!response.ok) throw new Error('Create failed');
       const body = await response.json() as { roomId?: string };
       if (signal.aborted) return;

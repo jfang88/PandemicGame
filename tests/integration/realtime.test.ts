@@ -128,6 +128,7 @@ it('migrates an existing v3 room before issuing realtime tickets', async () => {
   expect((await command(path, 0, 'SELECT_ROLE', { role: 'medic' })).status).toBe(200);
   await runInDurableObject(stub, (_instance, ctx) => ctx.storage.transactionSync(() => {
     ctx.storage.sql.exec('DROP TABLE socket_tickets');
+    ctx.storage.sql.exec('DROP TABLE retirement');
     ctx.storage.sql.exec('UPDATE metadata SET version = 3 WHERE singleton = 1');
   }));
   await evictDurableObject(stub);
@@ -224,3 +225,19 @@ it('keeps at most eight sockets across four members during concurrent replacemen
   expect(active).toBe(8);
   for (const socket of all) socket.close();
 }, 15_000);
+
+it('retires an idle room, revokes its live sockets and denies outstanding tickets', async () => {
+  const { path, stub } = await room();
+  const socket = await open(path, (await issue(path)).ticket);
+  const end = closed(socket);
+  const spare = await issue(path);
+  await runInDurableObject(stub, (_instance, ctx) => {
+    ctx.storage.sql.exec('UPDATE room SET expiresAt = ?', new Date(Date.now() - 1).toISOString());
+  });
+  expect((await command(path, 0, 'SELECT_ROLE', { role: 'medic' })).status).toBe(410);
+  expect((await ticket(path)).status).toBe(410);
+  expect((await upgrade(path, spare.ticket)).status).toBe(401);
+  expect(await runDurableObjectAlarm(stub)).toBe(true);
+  expect((await end).reason).toBe('Room expired');
+  expect((await upgrade(path, spare.ticket)).status).toBe(401);
+});

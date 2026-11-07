@@ -136,6 +136,16 @@ try {
         await second.getByRole('alert').filter({ hasText: 'Choose an action again' }).waitFor();
         assert.equal(staleRequests, 1);
         await owner.getByText(/3 actions left/).waitFor();
+
+        const roomPath = new URL(second.url()).pathname;
+        await second.route(origin + '/api' + roomPath, route => route.fulfill({
+          status: 410, json: { error: { code: 'ROOM_EXPIRED', message: 'Room expired.', retryable: false } },
+        }));
+        await second.reload();
+        await second.getByRole('status').filter({ hasText: 'This room expired.' }).waitFor();
+        await second.getByRole('link', { name: 'Your private rooms' }).click();
+        await second.getByRole('button', { name: 'Create room', exact: true }).waitFor();
+        assert.equal(await second.locator(`a[href="${roomPath}"]`).count(), 0);
       }
       assert.deepEqual(clients.flatMap(client => client.errors), []);
       console.log(`PASS: ${count} isolated browser identities joined, played a synchronized turn and retained their seat after reload`);
