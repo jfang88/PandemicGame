@@ -92,6 +92,49 @@ for task in tasks:
         for item in task[section]:
             assert item in text, f'Task spec drift: {task["id"]}'
 
+# Release traceability: each acceptance ID once, real evidence anchors, no unproven hosted pass.
+STATUSES = {'Pass', 'Local pass; hosted pending', 'Hosted pending'}
+HOSTED = {'P06', 'S06', 'S07', 'S09', 'S10', 'U01', 'U02', 'U03', 'U05', 'O01', 'O02', 'O03', 'O04', 'O05'}
+RUN_LINK = 'https://github.com/jfang88/PandemicGame/actions/runs/'
+acceptance_ids = re.findall(r'^\| ([EPSUO]\d{2}) \|', (root / 'docs/ACCEPTANCE.md').read_text(encoding='utf-8'), flags=re.M)
+assert len(acceptance_ids) == len(set(acceptance_ids)), 'Duplicate acceptance ID'
+assert HOSTED <= set(acceptance_ids), 'Hosted acceptance IDs must exist'
+traced = {}
+statuses = Counter()
+trace_text = (root / 'docs/TRACEABILITY.md').read_text(encoding='utf-8')
+for line in trace_text.splitlines():
+    match = re.match(r'^\| ([EPSUO]\d{2}) \| (.+) \|$', line)
+    if not match:
+        continue
+    trace_id, cells = match[1], match[2].split(' | ')
+    if trace_id in traced or len(cells) != 4:
+        errors.append(f'docs/TRACEABILITY.md: malformed or repeated row {trace_id}')
+        continue
+    evidence, _check, hosted, status = cells
+    traced[trace_id] = status
+    statuses[status] += 1
+    anchors = re.findall(r'`([^`]+)` “([^”]+)”', evidence)
+    if not anchors:
+        errors.append(f'docs/TRACEABILITY.md: {trace_id} cites no local evidence')
+    for cited, anchor in anchors:
+        path = root / cited
+        if not path.is_file():
+            errors.append(f'docs/TRACEABILITY.md: {trace_id} cites missing file {cited}')
+        elif anchor not in path.read_text(encoding='utf-8'):
+            errors.append(f'docs/TRACEABILITY.md: {trace_id} anchor not found in {cited}: {anchor}')
+    if status not in STATUSES:
+        errors.append(f'docs/TRACEABILITY.md: {trace_id} has unknown status {status}')
+    elif trace_id in HOSTED and status == 'Pass' and RUN_LINK not in hosted:
+        errors.append(f'docs/TRACEABILITY.md: {trace_id} needs a hosted run link before it can pass')
+    elif trace_id not in HOSTED and status != 'Pass':
+        errors.append(f'docs/TRACEABILITY.md: {trace_id} has no hosted gate and must pass locally')
+missing = [trace_id for trace_id in acceptance_ids if trace_id not in traced]
+unknown = sorted(set(traced) - set(acceptance_ids))
+if missing or unknown:
+    errors.append(f'docs/TRACEABILITY.md: untraced {missing}, unknown {unknown}')
+
 if errors:
     raise SystemExit('\n'.join(errors))
-print(f'PASS: Markdown links, {len(nodes)} connected board locations, {len(tasks)} ordered tasks; Firebase config/provider consistency')
+summary = ', '.join(f'{count} {status.lower()}' for status, count in sorted(statuses.items()))
+print(f'PASS: Markdown links, {len(nodes)} connected board locations, {len(tasks)} ordered tasks; Firebase config/provider consistency; '
+      f'{len(traced)} acceptance IDs traced ({summary})')

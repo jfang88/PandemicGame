@@ -55,4 +55,4 @@ Configure usage notifications and reasonable CPU/request limits in the provider 
 
 ## Release evidence
 
-Record commit, environment URL, account plan, bindings isolation, OAuth providers tested, test command outcomes, schema/rules versions, 10-room performance measurements, idle-hibernation observations, recovery rehearsal and known limitations. Do not claim backups or uptime guarantees without tested provider configuration.
+Record commit, environment URL, account plan, bindings isolation, OAuth providers tested, test command outcomes, schema/rules versions, 10-room performance measurements, idle-hibernation observations, recovery rehearsal and known limitations. Do not claim backups or uptime guarantees without tested provider configuration. The [release guide](RELEASE.md) lists the remaining owner checks and known issues.

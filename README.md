@@ -1,19 +1,10 @@
 # PandemicGame — Cloudflare build kit
 
-An original Pandemic-inspired cooperative browser game for **2–4 players per private room**. This repository contains the specification, coding-agent backlog and local T01 foundation, not a playable game. See [local development](docs/LOCAL_DEV.md) to run the scaffold. The default implementation uses Cloudflare Workers, Static Assets, SQLite-backed Durable Objects, and Firebase Authentication for Microsoft/Hotmail and Google login. No LLM runs during gameplay.
+An original Pandemic-inspired cooperative browser game for **2–4 players per private room**. This repository contains the rules engine, the Worker and room backend, the React client, Firebase sign-in, the test suites and a manual deployment workflow. Tasks T01–T16 are done. T17's deployment pipeline is merged and T18 prepared the release. Both wait on an owner-run Cloudflare preview, and nothing is deployed yet. See [local development](docs/LOCAL_DEV.md) to run it and the [release guide](docs/RELEASE.md) for the remaining owner steps. The default implementation uses Cloudflare Workers, Static Assets, SQLite-backed Durable Objects, and Firebase Authentication for Microsoft/Hotmail and Google login. No LLM runs during gameplay.
 
-## Start coding
+## Release status
 
-Give an agent this prompt:
-
-```text
-Work in jfang88/PandemicGame. Read AGENTS.md and docs/START_HERE.md.
-Implement T01 from TASKS.md using prompts/IMPLEMENT_TASK.md.
-Follow the task's acceptance criteria, run the relevant checks, and open
-a pull request with the results. Do not start the next task or deploy.
-```
-
-After T01 merges, replace T01 with the next task whose dependencies are complete. Each task has its own copyable prompt and acceptance gate in [docs/tasks](docs/tasks). GitHub issues mirror these tasks; [TASKS.md](TASKS.md) is the dependency/status index.
+The [release guide](docs/RELEASE.md) lists the tested commit, the owner prerequisites, the preview and recovery checks, the playtest script, production steps and known issues. The [traceability matrix](docs/TRACEABILITY.md) maps every acceptance ID to its evidence, and `npm run check:docs` keeps it accurate. Each task has its own copyable prompt and acceptance gate in [docs/tasks](docs/tasks). GitHub issues mirror these tasks; [TASKS.md](TASKS.md) is the dependency/status index. Follow-up work uses one branch and pull request per change with [the implementation prompt](prompts/IMPLEMENT_TASK.md).
 
 ## Read in this order
 
@@ -48,5 +39,5 @@ Budget: target **$0/month for occasional two-player use**, using Cloudflare Work
 - Fictional 48-location board, four threats, four roles, one difficulty; [spec/board.v1.json](spec/board.v1.json) supplies the canonical graph.
 - Friends join by authenticated invite link; play can pause indefinitely during disconnections, within the documented retention period.
 - All hands are visible to room members; future deck order and random seed are secret.
-- T01 provides local development, static checks, package tests and builds. Gameplay and later test suites become available as their tasks are implemented.
+- Local development runs the hot-seat game and the loopback multiplayer test entry without cloud accounts. [TESTING.md](docs/TESTING.md) lists every suite.
 - Do not upload credentials, tokens, copied commercial artwork or rulebook text. No software license has been selected by the owner yet.
