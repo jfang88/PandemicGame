@@ -1,6 +1,6 @@
 # T07 — Room persistence and protocol schemas
 
-Status: in review. Dependencies: T06.
+Status: done. Dependencies: T06.
 
 See the [room persistence gate report](../evidence/T07.md) for implementation and verification.
 

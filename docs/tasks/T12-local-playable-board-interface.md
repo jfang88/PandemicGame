@@ -1,6 +1,6 @@
 # T12 — Local playable board interface
 
-Status: in review. Dependencies: T06 (merged in [PR #27](https://github.com/jfang88/PandemicGame/pull/27)).
+Status: done ([PR #29](https://github.com/jfang88/PandemicGame/pull/29)). Dependencies: T06.
 
 ## Read
 

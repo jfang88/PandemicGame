@@ -1,4 +1,4 @@
-import { apiError, isUuid, MAX_JSON_BYTES, parseCreateRoom, PROTOCOL_VERSION, type ErrorCode } from '@pandemic/protocol';
+import { apiError, isUuid, MAX_JSON_BYTES, parseCommandEnvelope, parseCreateRoom, PROTOCOL_VERSION, type ErrorCode } from '@pandemic/protocol';
 import type { GameRoom } from './game-room';
 
 export interface Env {
@@ -16,6 +16,9 @@ const messages: Partial<Record<ErrorCode, string>> = {
   ROOM_EXPIRED: 'Room expired.',
   ROOM_CONFLICT: 'Room ID is unavailable.',
   ROOM_INCOMPATIBLE: 'Room data version is unsupported.',
+  PROTOCOL_UNSUPPORTED: 'Command protocol version is unsupported.',
+  STALE_VERSION: 'Refresh the room and choose an action again.',
+  COMMAND_ID_REUSED: 'Command ID has already been used for a different request.',
   INTERNAL_ERROR: 'Room request failed.',
 };
 
@@ -23,8 +26,8 @@ function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
 }
 
-function reject(code: ErrorCode, message = messages[code] ?? 'Request failed.'): Response {
-  const { body, status } = apiError(code, message);
+function reject(code: ErrorCode, message = messages[code] ?? 'Request failed.', currentVersion?: number): Response {
+  const { body, status } = apiError(code, message, code === 'INTERNAL_ERROR' || code === 'TEMPORARILY_UNAVAILABLE', currentVersion);
   return json(body, status);
 }
 
@@ -65,8 +68,9 @@ export async function route(request: Request, env: Env, userId: string | null = 
     return env.ASSETS ? env.ASSETS.fetch(request) : reject('ROOM_NOT_FOUND', 'Route not found.');
   }
   const create = pathname === '/api/rooms' && request.method === 'POST';
-  const roomMatch = request.method === 'GET' && /^\/api\/rooms\/([^/]+)$/.exec(pathname);
-  if (!create && !roomMatch) return reject('ROOM_NOT_FOUND', 'Route not found.');
+  const roomMatch = request.method === 'GET' ? /^\/api\/rooms\/([^/]+)$/.exec(pathname) : null;
+  const commandMatch = request.method === 'POST' ? /^\/api\/rooms\/([^/]+)\/commands$/.exec(pathname) : null;
+  if (!create && !roomMatch && !commandMatch) return reject('ROOM_NOT_FOUND', 'Route not found.');
   if (!userId) return reject('UNAUTHENTICATED');
   try {
     if (create) {
@@ -75,9 +79,16 @@ export async function route(request: Request, env: Env, userId: string | null = 
       const result = await env.GAME_ROOMS.getByName(body.value.roomId).create(body.value.roomId, userId);
       return 'code' in result ? reject(result.code) : json({ protocolVersion: PROTOCOL_VERSION, ...result });
     }
-    const roomId = roomMatch && roomMatch[1];
+    const roomId = (roomMatch ?? commandMatch)?.[1];
     if (!isUuid(roomId)) return reject('BAD_REQUEST', 'Invalid room ID.');
-    const result = await env.GAME_ROOMS.getByName(roomId.toLowerCase()).read(userId);
+    const stub = env.GAME_ROOMS.getByName(roomId.toLowerCase());
+    if (commandMatch) {
+      const body = parseCommandEnvelope(await readJson(request));
+      if (!body.ok) return reject(body.code);
+      const result = await stub.execute(userId, body.value);
+      return 'code' in result ? reject(result.code, undefined, result.currentVersion) : json(result);
+    }
+    const result = await stub.read(userId);
     return 'code' in result ? reject(result.code) : json(result.snapshot);
   } catch {
     return reject('INTERNAL_ERROR');
