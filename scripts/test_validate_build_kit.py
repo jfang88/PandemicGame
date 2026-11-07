@@ -23,16 +23,16 @@ class BuildKitTests(unittest.TestCase):
             generated.mkdir(parents=True)
             (generated / 'README.md').write_text('[bad](missing.md) supa' + 'base')
             command = [sys.executable, str(root / 'scripts/validate_build_kit.py')]
-            result = subprocess.run(command, capture_output=True, text=True)
+            result = subprocess.run(command, capture_output=True, encoding='utf-8')
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             authored = root / 'docs/nested'
             authored.mkdir()
             (authored / 'broken.md').write_text('[bad](missing.md)')
-            result = subprocess.run(command, capture_output=True, text=True)
+            result = subprocess.run(command, capture_output=True, encoding='utf-8')
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('missing link', result.stderr)
             (authored / 'broken.md').write_text('supa' + 'base')
-            result = subprocess.run(command, capture_output=True, text=True)
+            result = subprocess.run(command, capture_output=True, encoding='utf-8')
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('Obsolete provider reference', result.stderr)
 
