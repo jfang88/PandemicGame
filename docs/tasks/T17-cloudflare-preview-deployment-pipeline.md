@@ -1,6 +1,8 @@
 # T17 — Cloudflare preview deployment pipeline
 
-Status: not started. Dependencies: T16.
+Status: pipeline in review, live preview pending. Dependencies: T16.
+
+Use the [preview deployment evidence sheet](../evidence/T17.md) for the live gates.
 
 ## Read
 

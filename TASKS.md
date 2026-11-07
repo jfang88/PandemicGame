@@ -15,7 +15,8 @@ T11 is **done**. [PR #33](https://github.com/jfang88/PandemicGame/pull/33) merge
 T13 is **done**. [PR #35](https://github.com/jfang88/PandemicGame/pull/35) merged with [passing CI](https://github.com/jfang88/PandemicGame/actions/runs/42367516174). See the [connected lobby gate report](docs/evidence/T13.md).
 T14 is **done**. [PR #36](https://github.com/jfang88/PandemicGame/pull/36) merged with [passing CI](https://github.com/jfang88/PandemicGame/actions/runs/42368631518). See the [retention and compatibility gate report](docs/evidence/T14.md).
 T15 is **done**. [PR #37](https://github.com/jfang88/PandemicGame/pull/37) merged with [passing CI](https://github.com/jfang88/PandemicGame/actions/runs/42370046993). See the [browser regression gate report](docs/evidence/T15.md).
-T16 is **in review**. See the [abuse controls and load gate report](docs/evidence/T16.md).
+T16 is **done**. [PR #38](https://github.com/jfang88/PandemicGame/pull/38) merged with [passing CI](https://github.com/jfang88/PandemicGame/actions/runs/42371812776). See the [abuse controls and load gate report](docs/evidence/T16.md).
+T17 pipeline code is **in review**. Live preview and its release gates remain pending. See the [preview deployment evidence sheet](docs/evidence/T17.md).
 Merge reviewed work before starting its dependents.
 
 | Task | Dependencies | Status | Specification | GitHub issue |
@@ -35,8 +36,8 @@ Merge reviewed work before starting its dependents.
 | T13: Connected lobby and multiplayer UI | T11, T12 | done | [Task prompt](docs/tasks/T13-connected-lobby-and-multiplayer-ui.md) | [#13](https://github.com/jfang88/PandemicGame/issues/13) |
 | T14: Durable resume retention and compatibility | T13 | done | [Task prompt](docs/tasks/T14-durable-resume-retention-and-compatibility.md) | [#14](https://github.com/jfang88/PandemicGame/issues/14) |
 | T15: Multiplayer browser regression suite | T14 | done | [Task prompt](docs/tasks/T15-multiplayer-browser-regression-suite.md) | [#15](https://github.com/jfang88/PandemicGame/issues/15) |
-| T16: Abuse controls observability and load | T15 | in review | [Task prompt](docs/tasks/T16-abuse-controls-observability-and-load.md) | [#16](https://github.com/jfang88/PandemicGame/issues/16) |
-| T17: Cloudflare preview deployment pipeline | T16 | not started | [Task prompt](docs/tasks/T17-cloudflare-preview-deployment-pipeline.md) | [#17](https://github.com/jfang88/PandemicGame/issues/17) |
+| T16: Abuse controls observability and load | T15 | done | [Task prompt](docs/tasks/T16-abuse-controls-observability-and-load.md) | [#16](https://github.com/jfang88/PandemicGame/issues/16) |
+| T17: Cloudflare preview deployment pipeline | T16 | in review | [Task prompt](docs/tasks/T17-cloudflare-preview-deployment-pipeline.md) | [#17](https://github.com/jfang88/PandemicGame/issues/17) |
 | T18: Release readiness and owner handoff | T17 | not started | [Task prompt](docs/tasks/T18-release-readiness-and-owner-handoff.md) | [#18](https://github.com/jfang88/PandemicGame/issues/18) |
 
 ## Gates

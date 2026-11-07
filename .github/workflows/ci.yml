@@ -2,6 +2,7 @@ name: Pull request checks
 on:
   pull_request:
   workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 jobs:
@@ -23,6 +24,9 @@ jobs:
       - run: npm run build
       - run: node scripts/check-worker-test-isolation.mjs
       - run: npm run check:docs
+      - run: node --test scripts/deployment-policy.test.mjs
+      - run: npm run validate:deployment -- preview
+      - run: npm run validate:deployment -- production
       - name: Install Chromium for foundation smoke
         run: npx playwright install --with-deps chromium
       - run: npm run test:smoke
