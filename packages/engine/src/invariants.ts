@@ -12,8 +12,8 @@ function sameCards(actual: readonly string[], expected: readonly string[], label
   invariant(actual.length === expected.length && new Set(actual).size === expected.length
     && actual.every(card => expected.includes(card)), `${label} conservation`);
 }
-/** T02 structural/conservation checks, not an untrusted snapshot parser.
- * T04/T05 will extend continuation/hand-limit and terminal semantics; T06 audits all rules.
+/** Structural/conservation checks for internal snapshots.
+ * T06 audits all rules.
  * Automatic resolvers must restore removed cards before calling.
  */
 export function assertGameInvariants(state: GameState): void {
@@ -55,6 +55,18 @@ export function assertGameInvariants(state: GameState): void {
   sameCards([...playerCards.filter(card => card.startsWith('e:')), ...state.resolvedEpidemics], ['e:1', 'e:2', 'e:3', 'e:4'], 'epidemics');
   invariant(['ACTIONS', 'DRAW', 'DISCARD_REQUIRED', 'INFECTION', 'WON', 'LOST'].includes(state.phase), 'phase');
   invariant((state.phase === 'DISCARD_REQUIRED') === (state.continuation !== null), 'continuation phase');
+  const overLimit = state.players.filter(player => player.hand.length > 7);
+  if (state.continuation) {
+    const { userId, resume } = state.continuation;
+    invariant(overLimit.length === 1 && overLimit[0]?.userId === userId, 'pending discard owner');
+    if (resume.phase === 'ACTIONS') {
+      invariant(integer(resume.actionsRemaining, 1, 3) && resume.actionsRemaining === state.actionsRemaining, 'resume actions');
+    } else {
+      invariant(integer(resume.drawsRemaining, 0, 2) && state.actionsRemaining === 0, 'resume draw');
+    }
+  } else {
+    invariant(overLimit.length === 0, 'hand limit');
+  }
   invariant((state.phase === 'WON' || state.phase === 'LOST') === (state.outcome !== null), 'outcome phase');
   if (state.phase === 'ACTIONS') invariant(state.actionsRemaining >= 1, 'action phase budget');
   if (state.phase === 'WON') invariant(state.outcome?.kind === 'won' && COLORS.every(color => state.cured[color]), 'win');

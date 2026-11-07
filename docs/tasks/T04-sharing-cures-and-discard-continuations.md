@@ -1,6 +1,17 @@
 # T04 — Sharing cures and discard continuations
 
-Status: not started. Dependencies: T03.
+Status: in review. Dependencies: T03.
+
+## Implementation evidence
+
+- E09 covers a matching-location transfer, the Courier exception, ownership and co-location.
+- E10 covers Scientist and ordinary cure payments, including duplicate, wrong-color and unowned cards, missing centers and repeat cures.
+- E12 covers the seven-to-eight-card boundary, recipient-only discard, and resuming with one remaining action or two pending draws.
+- E21 and E23 cover immediate victory on the fourth action with an empty player deck, terminal rejection and rejection without changing state or RNG.
+
+Multi-card discards process IDs in payload order, placing each on top of the player discard. Authorized members can see hands and card events under the public projection contract in [DATA_MODEL.md](../DATA_MODEL.md). This task implements the engine events. Room snapshots and delivery are later work.
+
+T05 connects automatic draw and infection resolution. Its resolver needs to read the pending draw count from the input continuation before a successful discard clears it.
 
 ## Read
 

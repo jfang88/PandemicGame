@@ -46,6 +46,114 @@ function reject(state: GameState, input: unknown, error: ActionError = 'ILLEGAL_
   expect(JSON.stringify(state)).toBe(before);
 }
 const move = (destination: string): ActionCommand => ({ type: 'MOVE', payload: { destination } });
+const give = (cardId: LocationCardId, recipientUserId = 'other'): ActionCommand =>
+  ({ type: 'GIVE_CARD', payload: { cardId, recipientUserId } });
+const discard = (...cardIds: LocationCardId[]): ActionCommand => ({ type: 'DISCARD', payload: { cardIds } });
+const cureBlack = (...cardIds: LocationCardId[]): ActionCommand =>
+  ({ type: 'DISCOVER_CURE', payload: { color: 'black', cardIds } });
+
+function sharingFixture(actionsRemaining: number, handSize: number): GameState {
+  const state = fixture('scientist', ['p:A01', 'p:B01']);
+  const cards: LocationCardId[] = ['p:A02', 'p:A03', 'p:A04', 'p:A05', 'p:A06', 'p:A07', 'p:A08'];
+  const hand = cards.slice(0, handSize);
+  return { ...state, actionsRemaining,
+    playerDeck: state.playerDeck.filter(card => !hand.some(id => id === card)),
+    players: [state.players[0]!, { ...state.players[1]!, hand }],
+  };
+}
+
+describe('E09/E12 card sharing and continuations', () => {
+  it('transfers a matching card to reach seven with no discard pause', () => {
+    const state = sharingFixture(4, 6);
+    const result = accept(state, give('p:A01'));
+    expect(result.state.phase).toBe('ACTIONS');
+    expect(result.state.continuation).toBeNull();
+    expect(result.state.players.map(player => player.hand)).toEqual([
+      ['p:B01'], [...state.players[1]!.hand, 'p:A01'],
+    ]);
+    expect(result.events[0]).toEqual({ type: 'CARD_GIVEN', userId: 'actor', recipientUserId: 'other', cardId: 'p:A01' });
+    expect(result.state.playerDiscard).toEqual([]);
+  });
+
+  it('enforces ownership, different co-located recipient and the Courier exception', () => {
+    const state = sharingFixture(4, 6);
+    reject(state, give('p:B01'));
+    reject(state, give('p:A02'));
+    reject(state, give('p:A01', 'actor'));
+    reject(state, give('p:A01', 'unknown'));
+    reject(state, discard('p:A01'), 'WRONG_PHASE');
+    const courier = fixture('courier', ['p:B01']);
+    expect(accept(courier, give('p:B01')).state.players[1]!.hand).toEqual(['p:B01']);
+    reject(at(courier, 'A02'), give('p:B01'));
+  });
+
+  it.each([1, 2])('pauses for the recipient with %s action(s) left before sharing', actions => {
+    const state = sharingFixture(actions, 7);
+    const paused = accept(state, give('p:A01')).state;
+    const resume = actions === 1 ? { phase: 'DRAW', drawsRemaining: 2 }
+      : { phase: 'ACTIONS', actionsRemaining: 1 };
+    expect(paused.phase).toBe('DISCARD_REQUIRED');
+    expect(paused.continuation).toEqual({ userId: 'other', resume });
+    expect(paused.players[1]!.hand).toHaveLength(8);
+    reject(paused, discard('p:A01'), 'WRONG_TURN');
+    reject(paused, move('A02'), 'WRONG_PHASE', 'other');
+    reject(paused, discard(), 'BAD_REQUEST', 'other');
+    reject(paused, discard('p:A01', 'p:A01'), 'ILLEGAL_ACTION', 'other');
+    reject(paused, discard('p:A01', 'p:A02'), 'ILLEGAL_ACTION', 'other');
+    reject(paused, discard('p:B01'), 'ILLEGAL_ACTION', 'other');
+    const command = freeze(discard('p:A01'));
+    const result = applyCommand(paused, 'other', command);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.error);
+    expect(result).toEqual(applyCommand(paused, 'other', command));
+    expect(result.state).toEqual({ ...paused, phase: resume.phase, continuation: null,
+      players: [paused.players[0], state.players[1]], playerDiscard: ['p:A01'] });
+    expect(result.events).toEqual([
+      { type: 'CARD_DISCARDED', userId: 'other', cardId: 'p:A01' },
+      { type: 'PHASE_CHANGED', phase: resume.phase },
+    ]);
+    assertGameInvariants(result.state);
+  });
+});
+
+describe('E10/E21 cure costs and immediate victory', () => {
+  const black: LocationCardId[] = ['p:D05', 'p:D06', 'p:D07', 'p:D08', 'p:E05'];
+
+  it.each(['scientist', 'medic'] as const)('%s pays the exact matching-card cost', role => {
+    const required = role === 'scientist' ? 4 : 5;
+    const payment = black.slice(0, required);
+    const state = fixture(role, [...black, 'p:D04']);
+    const result = accept(state, cureBlack(...payment));
+    expect(result.state.cured.black).toBe(true);
+    expect(result.state.playerDiscard).toEqual([...payment].reverse());
+    expect(result.state.players[0]!.hand).toEqual([...black.slice(required), 'p:D04']);
+    expect(result.events).toContainEqual({ type: 'CURE_DISCOVERED', userId: 'actor', color: 'black' });
+    reject(state, cureBlack(...black.slice(0, required === 4 ? 5 : 4)));
+    reject(state, cureBlack(...payment.slice(1), payment[1]!));
+    reject(state, cureBlack(...payment.slice(1), 'p:D04'));
+    reject(state, cureBlack(...payment.slice(1), 'p:F08'));
+    reject(at(state, 'A02'), cureBlack(...payment));
+    reject({ ...state, cured: { ...state.cured, black: true } }, cureBlack(...payment));
+  });
+
+  it('wins on the fourth action without drawing from an empty deck', () => {
+    const payment = black.slice(0, 4);
+    const base = fixture('scientist', payment);
+    const state: GameState = { ...base, actionsRemaining: 1, playerDeck: [],
+      cured: { blue: true, yellow: true, red: true, black: false },
+      resolvedEpidemics: ['e:1', 'e:2', 'e:3', 'e:4'],
+      playerDiscard: base.playerDeck.filter((card): card is LocationCardId => card.startsWith('p:')),
+    };
+    const result = accept(state, cureBlack(...payment));
+    expect(result.state.phase).toBe('WON');
+    expect(result.state.outcome).toEqual({ kind: 'won' });
+    expect(result.state.activeSeat).toBe(state.activeSeat);
+    expect(result.state.playerDeck).toEqual([]);
+    expect(result.state.infectionDeck).toBe(state.infectionDeck);
+    expect(result.events.at(-1)).toEqual({ type: 'PHASE_CHANGED', phase: 'WON' });
+    reject(result.state, discard('p:A01'), 'GAME_FINISHED', 'other');
+  });
+});
 
 describe('E03 movement', () => {
   it('moves one edge for one action, then rejects nonadjacent A04', () => {
