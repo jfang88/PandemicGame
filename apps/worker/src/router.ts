@@ -68,9 +68,15 @@ function rejectResult(result: { code: ErrorCode; currentVersion?: number; retryA
   return reject(result.code, undefined, result.currentVersion, result.retryAfter);
 }
 
-export async function guardEdgeIp(request: Request, env: Env): Promise<Response | null> {
+/** Create, join, room reads and ticket requests share one approximate per-IP budget. Commands use the room limiter. */
+function edgeLimited(request: Request): boolean {
   const path = new URL(request.url).pathname;
-  if (request.method !== 'POST' || (path !== '/api/rooms' && !/^\/api\/rooms\/[^/]+\/join$/.test(path))) return null;
+  if (request.method === 'GET') return /^\/api\/rooms\/[^/]+$/.test(path);
+  return request.method === 'POST' && (path === '/api/rooms' || /^\/api\/rooms\/[^/]+\/(?:join|ws-ticket)$/.test(path));
+}
+
+export async function guardEdgeIp(request: Request, env: Env): Promise<Response | null> {
+  if (!edgeLimited(request)) return null;
   if (!env.EDGE_ROOM_IP) return env.APP_ENV ? reject('TEMPORARILY_UNAVAILABLE') : null;
   const ip = request.headers.get('cf-connecting-ip');
   if (!ip && !env.APP_ENV) return null;

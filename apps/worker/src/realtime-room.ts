@@ -46,6 +46,8 @@ function sendSnapshot(socket: WebSocket, snapshot: PublicRoomSnapshot): void {
 
 export abstract class RealtimeRoom extends DurableObject<Env> {
   protected abstract readonly compatible: boolean;
+  /** False for an object that has never held a room. It has no tables. */
+  protected abstract readonly initialized: boolean;
   protected abstract retentionDeadline(now: number): number;
   protected abstract expireRetention(now: number): boolean;
   abstract read(userId: string): { snapshot: PublicRoomSnapshot } | { code: ErrorCode };
@@ -84,7 +86,7 @@ export abstract class RealtimeRoom extends DurableObject<Env> {
     const origin = allowedSocketOrigin(request, this.env);
     const tickets = url.searchParams.getAll('ticket');
     const ticket = tickets[0];
-    if (!this.compatible || request.method !== 'GET' || request.headers.get('upgrade')?.toLowerCase() !== 'websocket'
+    if (!this.compatible || !this.initialized || request.method !== 'GET' || request.headers.get('upgrade')?.toLowerCase() !== 'websocket'
       || !origin || url.searchParams.size !== 1 || tickets.length !== 1 || !ticket || !/^[0-9a-f]{64}$/.test(ticket)) {
       return socketError('INVALID_TICKET', 'Socket upgrade was denied.');
     }
@@ -139,6 +141,7 @@ export abstract class RealtimeRoom extends DurableObject<Env> {
   }
 
   protected scheduleExpiry(): Promise<void> {
+    if (!this.initialized) return Promise.resolve();
     const now = Date.now();
     const { next } = this.ctx.storage.sql.exec<{ next: number | null }>(
       'SELECT MIN(expiresAt) AS next FROM socket_tickets',
@@ -151,7 +154,7 @@ export abstract class RealtimeRoom extends DurableObject<Env> {
   }
 
   async alarm(): Promise<void> {
-    if (!this.compatible) return;
+    if (!this.compatible || !this.initialized) return;
     const now = Date.now();
     const expired = this.expireRetention(now);
     this.ctx.storage.sql.exec('DELETE FROM socket_tickets WHERE expiresAt <= ?', now);

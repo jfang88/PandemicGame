@@ -25,7 +25,7 @@ For a planning example, one 300-command match might use 500–1,000 API requests
 | Commands | 30/min/user/room with burst 10 |
 | Create room | 10 distinct IDs per verified UID in an hour-long window that starts with the first attempt |
 | Join attempts | Approximate 20/min/verified UID per Cloudflare location |
-| Create and join IP protection | Approximate combined 120/min/client IP per Cloudflare location |
+| Create, join, room read and ticket IP protection | Approximate combined 120/min/client IP per Cloudflare location |
 | Lobby retention | 7 days since accepted mutation |
 | Running retention | 30 days since accepted gameplay mutation |
 | Finished retention | 30 days since result |
@@ -33,7 +33,7 @@ For a planning example, one 300-command match might use 500–1,000 API requests
 
 The SQLite room bucket refills one token every two seconds. New command attempts and invite rotations count, including stale and conflicting requests from members. Exact accepted retries reuse their receipts. An independent SQLite object per verified UID counts distinct create IDs atomically, including failed dispatches, and permits same-ID retries within its active window. The limiter stores a digest as the counter object's lookup key. Rate limit responses carry an integer `Retry-After` in seconds.
 
-Cloudflare's native binding checks the IP before Firebase verification for create/join. A second binding checks a digest of the verified UID for join. These counters are approximate and local to a Cloudflare location. The preview and production templates have separate binding IDs. Verify both bindings on the owned preview before relying on their enforcement. [Workers rate-limit bindings](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)
+Cloudflare's native binding checks the IP before Firebase verification for create, join, room reads and socket ticket requests. Commands use the room bucket, and socket upgrades spend an already-issued ticket. A request for a room ID that was never created reads no storage tables and writes nothing. A second binding checks a digest of the verified UID for join. These counters are approximate and local to a Cloudflare location. The preview and production templates have separate binding IDs. Verify both bindings on the owned preview before relying on their enforcement. [Workers rate-limit bindings](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)
 
 ## Observability
 

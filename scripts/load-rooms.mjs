@@ -235,13 +235,14 @@ async function request(client, path, method = 'GET', body, expected = 200) {
   return response.json().catch(() => { throw new LoadFailure('INVALID_HTTP_RESPONSE'); });
 }
 
-function setupRequest(client, path, body) {
-  if (!preview) return request(client, path, 'POST', body);
-  // Pace aggregate create/join attempts from one IP at <= 90 per minute.
+function setupRequest(client, path, body, method = 'POST', expected = 200) {
+  if (!preview) return request(client, path, method, body, expected);
+  // Pace create, join, room read and ticket attempts from one IP at <= 90 per minute.
+  // They share the preview's 120 per minute edge IP limit.
   const result = setupTail.then(async () => {
     await sleep(Math.max(0, lastSetup + 700 - performance.now()), undefined, { signal: controller.signal });
     lastSetup = performance.now();
-    return request(client, path, 'POST', body);
+    return request(client, path, method, body, expected);
   });
   setupTail = result.catch(() => {});
   return result;
@@ -277,10 +278,10 @@ async function startRoom(slot, clients, outsider, page) {
   requireLoad(started.acceptedVersion === ++revision && started.snapshot.revision === revision
     && started.snapshot.lifecycle === 'RUNNING', 'START_REVISION_MISMATCH');
   verifySnapshot(started.snapshot, roomId, clients);
-  const denied = await request(outsider, path, 'GET', undefined, 403);
+  const denied = await setupRequest(outsider, path, undefined, 'GET', 403);
   requireLoad(denied.error?.code === 'NOT_MEMBER' && !denied.snapshot && !containsPrivateKey(denied), 'CROSS_ROOM_READ_FAILED');
   const urls = await Promise.all(clients.map(async client => {
-    const { ticket } = await request(client, path + '/ws-ticket', 'POST');
+    const { ticket } = await setupRequest(client, path + '/ws-ticket');
     requireLoad(typeof ticket === 'string' && /^[0-9a-f]{64}$/.test(ticket), 'INVALID_SOCKET_TICKET');
     const url = new URL(path + '/ws', target.apiOrigin);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';

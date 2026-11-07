@@ -325,6 +325,37 @@ it('rejects unknown room and storage versions without rewriting them', async () 
     ctx.storage.sql.exec<{ version: number }>('SELECT version FROM metadata').one().version)).toBe(99);
 });
 
+it('leaves no storage for requests to an unknown room and still creates it later', async () => {
+  const roomId = crypto.randomUUID();
+  const path = `/api/rooms/${roomId}`;
+  const stub = bindings.GAME_ROOMS.getByName(roomId);
+  const json = (body: object, headers: HeadersInit = {}) => ({ method: 'POST', body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json', ...headers } });
+  const tables = () => runInDurableObject(stub, (_instance, ctx) => ctx.storage.sql.exec<{ name: string }>(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\'",
+  ).toArray().map(({ name }) => name));
+
+  await error(await request(path, owner), 404, 'ROOM_NOT_FOUND');
+  await error(await request(path + '/ws-ticket', owner, { method: 'POST', headers: { origin: 'http://127.0.0.1:8787' } }),
+    404, 'ROOM_NOT_FOUND');
+  await error(await request(path + '/commands', owner, json({ protocolVersion: 1, commandId: crypto.randomUUID(),
+    expectedVersion: 0, type: 'PASS', payload: {} })), 404, 'ROOM_NOT_FOUND');
+  await error(await request(path + '/invite', owner, json({ commandId: crypto.randomUUID(), expectedVersion: 0 })),
+    404, 'ROOM_NOT_FOUND');
+  await error(await request(path + '/join', other, json({ commandId: crypto.randomUUID(), inviteSecret: 'a'.repeat(32) })),
+    404, 'ROOM_NOT_FOUND');
+  await error(await request(`${path}/ws?ticket=${'a'.repeat(64)}`, undefined,
+    { headers: { origin: 'http://127.0.0.1:8787', upgrade: 'websocket' } }), 401, 'INVALID_TICKET');
+  expect(await tables()).toEqual([]);
+  expect(await runInDurableObject(stub, (_instance, ctx) => ctx.storage.getAlarm())).toBeNull();
+
+  await evictDurableObject(stub);
+  expect(await (await create(roomId)).json()).toMatchObject({ roomId, version: 0 });
+  expect((await request(path, owner)).status).toBe(200);
+  expect(await tables()).toEqual(expect.arrayContaining(['metadata', 'room', 'members', 'commands', 'events']));
+  expect(await runInDurableObject(stub, (_instance, ctx) => ctx.storage.getAlarm())).toEqual(expect.any(Number));
+});
+
 it('serves SPA navigation and JSON API misses through the real local asset binding', async () => {
   const headers = { accept: 'text/html', 'sec-fetch-mode': 'navigate' };
   const deepLink = await request('/join/sample-deep-link', undefined, { headers });
@@ -494,6 +525,25 @@ it('applies edge IP and verified UID bindings before dispatch and sanitizes logg
   }
 });
 
+
+it('charges room reads and ticket requests to the edge IP budget but not commands or upgrades', async () => {
+  const ip = vi.fn(async () => ({ success: false }));
+  const roomId = crypto.randomUUID();
+  const send = (path: string, method: string) => normalWorker.fetch(new Request(local + path, { method,
+    headers: { 'cf-connecting-ip': '203.0.113.9', authorization: 'Bearer never-log-token' },
+  }) as Parameters<typeof normalWorker.fetch>[0], { ...bindings, EDGE_ROOM_IP: { limit: ip } });
+  for (const [path, method] of [[`/api/rooms/${roomId}`, 'GET'], [`/api/rooms/${roomId}/ws-ticket`, 'POST']]) {
+    const limited = await send(path!, method!);
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get('retry-after')).toBe('60');
+  }
+  expect(ip).toHaveBeenCalledTimes(2);
+  expect(ip).toHaveBeenCalledWith({ key: '203.0.113.9' });
+  expect((await send(`/api/rooms/${roomId}/commands`, 'POST')).status).toBe(401);
+  expect((await send(`/api/rooms/${roomId}/ws?ticket=${'a'.repeat(64)}`, 'GET')).status).toBe(401);
+  expect((await send('/api/health', 'GET')).status).toBe(200);
+  expect(ip).toHaveBeenCalledTimes(2);
+});
 
 it('fails closed if a public snapshot would exceed the wire budget', async () => {
   const roomId = crypto.randomUUID();
