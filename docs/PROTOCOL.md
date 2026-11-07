@@ -8,8 +8,8 @@ All non-health API endpoints require `Authorization: Bearer <Firebase ID token>`
 | --- | --- | --- |
 | GET /api/health | None | `{ok:true,buildSha,protocolVersion}`, public build metadata and the foundation connectivity flag |
 | POST /api/rooms | `{roomId}` UUID generated once per create attempt | Idempotently creates owned lobby, returns roomId/version; same owner retries succeed, different owner conflicts |
-| POST /api/rooms/:id/invite | `{commandId,expectedVersion}` | Owner-only LOBBY; rotate invite, persist receipt, return raw invite secret to owner only |
-| POST /api/rooms/:id/join | `{commandId,inviteSecret}` | Authenticated lobby admission, stable seat; max four; existing member returns membership without a second seat |
+| POST /api/rooms/:id/invite | `{commandId,expectedVersion}` | Owner-only LOBBY mutation; returns `{protocolVersion,commandId,acceptedVersion,duplicate,inviteSecret}` |
+| POST /api/rooms/:id/join | `{commandId,inviteSecret}` | Authenticated lobby admission with the standard acceptance envelope; max four, stable seats and idempotent membership |
 | GET /api/rooms/:id | None | Membership-only current public snapshot |
 | POST /api/rooms/:id/commands | Command envelope | Accepted receipt/current snapshot or structured error |
 | POST /api/rooms/:id/ws-ticket | None | Membership-only `{ticket,expiresAt}`; no-store; 60-second one-use ticket |
@@ -35,9 +35,9 @@ Envelope: `{protocolVersion:1, commandId:<UUID>, expectedVersion:<integer>, type
 | DISCOVER_CURE | `{color,cardIds:string[]}` |
 | DISCARD | `{cardIds:string[]}` |
 
-Changing role clears actor's ready flag. Joining/leaving clears all remaining ready flags; rotating invites does not. Ready=true requires a selected unique role. Start requires 2–4 members, all ready, all roles selected and unique; roster freezes and engine setup runs atomically. No more than four members or duplicate selected roles can commit even under simultaneous joins/selections. Leave allowed only in lobby. Leaver retry may read its own leave receipt before membership check, but cannot obtain any room snapshot/history afterward.
+Changing role clears the actor's ready flag. Joining or leaving clears all remaining ready flags. Rotating invites preserves readiness. Ready=true requires a selected unique role. Start requires 2–4 ready members with unique roles. The roster freezes and engine setup runs atomically. A new member takes the lowest vacant seat and existing members retain their seats. If the owner leaves the lobby, the lowest occupied seat becomes owner. An exact leave retry can recover only its own receipt after departure.
 
-Accepted HTTP 200: `{protocolVersion:1, commandId, acceptedVersion, duplicate:boolean, snapshot}`. Snapshot is the current public state, possibly newer than acceptedVersion for a retry. Rejected: `{error:{code,message,retryable}, currentVersion?}`; include a snapshot only when caller is an authorized member. Invalid commands do not increment version. Authentication and rate failures are not stored as accepted-command receipts.
+Accepted HTTP 200: `{protocolVersion:1, commandId, acceptedVersion, duplicate:boolean, snapshot}`. Snapshot is the current public state, possibly newer than acceptedVersion for a retry. A successful `LEAVE_LOBBY` or its exact retry returns the same envelope with the snapshot omitted. Rejected: `{error:{code,message,retryable}, currentVersion?}`; include a snapshot only when caller is an authorized member. Invalid commands do not increment version. Authentication and rate failures are not stored as accepted-command receipts.
 
 | HTTP | Codes |
 | --- | --- |

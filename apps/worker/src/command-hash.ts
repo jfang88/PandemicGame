@@ -10,8 +10,16 @@ function canonicalJson(value: unknown): string {
 }
 
 /** Hash validated JSON; payload object order is irrelevant but payment order is significant. */
-export async function commandHash({ protocolVersion, expectedVersion, type, payload }: CommandEnvelope): Promise<string> {
-  const input = new TextEncoder().encode(canonicalJson({ protocolVersion, expectedVersion, type, payload }));
+export function commandHash({ protocolVersion, expectedVersion, type, payload }: CommandEnvelope): Promise<string> {
+  return requestHash({ protocolVersion, expectedVersion, type, payload });
+}
+
+export function requestHash(value: unknown): Promise<string> {
+  return sha256(canonicalJson(value));
+}
+
+export async function sha256(value: string): Promise<string> {
+  const input = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest('SHA-256', input);
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
