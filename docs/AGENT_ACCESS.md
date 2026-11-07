@@ -1,5 +1,7 @@
 # Owner onboarding and secure coding-agent deployment
 
+For the console steps, environment values and first-preview checklist, start with [Owner cloud setup](OWNER_CLOUD_SETUP.md).
+
 This is a step-by-step **owner setup** guide for the Cloudflare/Firebase architecture. It does not mean accounts, credentials, hosted services or GitHub deployment environments have already been created. Complete it before real-provider testing (T11/T17). T01–T10 can primarily be developed and tested locally with no cloud credentials.
 
 ## 1. Account sign-up and ownership
