@@ -167,7 +167,7 @@ export function ConnectedRoom({ auth, uid, roomId, signOut, signOutBusy, signOut
 
   const canAct = online && !pending;
   const game = snapshot && gameView(snapshot);
-  const banner = <header>
+  const banner = <header data-room-revision={snapshot?.revision}>
     <p>Signed in.</p>
     <p role="status">{online ? pending ? 'Submitting action…' : 'Connected to room'
       : ended === 'room-expired' ? 'This room expired.'

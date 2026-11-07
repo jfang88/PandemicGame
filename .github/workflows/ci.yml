@@ -21,9 +21,19 @@ jobs:
       - run: npm run test:unit
       - run: npm run test:integration
       - run: npm run build
+      - run: node scripts/check-worker-test-isolation.mjs
       - run: npm run check:docs
       - name: Install Chromium for foundation smoke
         run: npx playwright install --with-deps chromium
       - run: npm run test:smoke
       - run: npm run test:auth-smoke
       - run: npm run test:connected-smoke
+      - run: npm run test:e2e
+      - name: Upload sanitized browser failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: browser-regression-failure
+          path: test-results/connected-regression/
+          if-no-files-found: ignore
+          retention-days: 7

@@ -21,7 +21,8 @@
     "check:docs": "python3 scripts/validate_build_kit.py && python3 scripts/test_validate_build_kit.py",
     "test:smoke": "node scripts/smoke-foundation.mjs",
     "test:auth-smoke": "node scripts/test-auth-popup.mjs",
-    "test:connected-smoke": "node scripts/test-connected-room.mjs"
+    "test:connected-smoke": "node scripts/test-connected-room.mjs",
+    "test:e2e": "node scripts/test-connected-room.mjs --full"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.6.0",

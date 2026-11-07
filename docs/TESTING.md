@@ -16,7 +16,7 @@ Test Firebase Secure Token certificate retrieval using controlled RS256-signed t
 
 Playwright independent browser contexts (one context per identity, not tabs sharing storage). Matrix: 2, 3, 4 players; primary CI browser Chromium, Firefox/WebKit smoke where practical. Test invite/login return path, lobby capacity/readiness, legal and rejected actions, hand-limit UI, terminal outcome, refresh/offline/reconnect, two tabs for one identity, duplicate/stale snapshots and session expiry.
 
-Local fixture creation is test-only and excluded from deployment. Pin test seed and use deterministic bounded action drivers; include visible interactions instead of sending every action directly through API. Use API setup helpers only to isolate scenarios. Capture failure screenshots/traces; ensure no production credentials in artifacts. Do not disable an assertion to hide a flaky test; isolate and fix race conditions.
+Local fixture creation is test-only and excluded from deployment. Pin test seed and use deterministic bounded action drivers; include visible interactions instead of sending every action directly through API. Use API setup helpers only to isolate scenarios. T15 runs with `npm run test:e2e` after installing Playwright Chromium. Failures write a short scenario and revision report with masked screenshots under `test-results/connected-regression/`. CI uploads these files for seven days. The suite omits network traces because room requests and sockets carry invite secrets and tickets. Do not disable an assertion to hide a flaky test; isolate and fix race conditions.
 
 ## Layer 4: staging/release
 
