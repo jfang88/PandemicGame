@@ -118,3 +118,11 @@ export function projectRoom(source: RoomProjectionSource) {
 }
 
 export type PublicRoomSnapshot = ReturnType<typeof projectRoom>;
+
+export interface CommandAcceptance {
+  readonly protocolVersion: typeof PROTOCOL_VERSION;
+  readonly commandId: string;
+  readonly acceptedVersion: number;
+  readonly duplicate: boolean;
+  readonly snapshot: PublicRoomSnapshot;
+}

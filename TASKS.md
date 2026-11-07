@@ -7,8 +7,9 @@ T03 is **done**. [PR #24](https://github.com/jfang88/PandemicGame/pull/24) merge
 T04 is **done**. [PR #25](https://github.com/jfang88/PandemicGame/pull/25) merged with [passing CI](https://github.com/jfang88/PandemicGame/actions/runs/42356430404).
 T05 is **done**. [PR #26](https://github.com/jfang88/PandemicGame/pull/26) merged with [passing CI](https://github.com/jfang88/PandemicGame/actions/runs/42357187273).
 T06 is **done**. [PR #27](https://github.com/jfang88/PandemicGame/pull/27) merged with [passing CI](https://github.com/jfang88/PandemicGame/actions/runs/42357783401). See the [engine gate report](docs/evidence/T06.md).
-T07 is **in review**. See the [room persistence gate report](docs/evidence/T07.md).
-Merge reviewed work before starting its dependents. T07 (backend) and T12 (local UI) share the T06 dependency and can run independently.
+T07 and T12 are **done**. [PR #28](https://github.com/jfang88/PandemicGame/pull/28) and [PR #29](https://github.com/jfang88/PandemicGame/pull/29) merged with passing CI.
+T08 is **in review**. See the [atomic command gate report](docs/evidence/T08.md).
+Merge reviewed work before starting its dependents.
 
 | Task | Dependencies | Status | Specification | GitHub issue |
 | --- | --- | --- | --- | --- |
@@ -18,12 +19,12 @@ Merge reviewed work before starting its dependents. T07 (backend) and T12 (local
 | T04: Sharing cures and discard continuations | T03 | done | [Task prompt](docs/tasks/T04-sharing-cures-and-discard-continuations.md) | [#4](https://github.com/jfang88/PandemicGame/issues/4) |
 | T05: Draw infection epidemics and losses | T04 | done | [Task prompt](docs/tasks/T05-draw-infection-epidemics-and-losses.md) | [#5](https://github.com/jfang88/PandemicGame/issues/5) |
 | T06: Engine invariants and independent rules review | T05 | done | [Task prompt](docs/tasks/T06-engine-invariants-and-independent-rules-review.md) | [#6](https://github.com/jfang88/PandemicGame/issues/6) |
-| T07: Room persistence and protocol schemas | T06 | in review | [Task prompt](docs/tasks/T07-room-persistence-and-protocol-schemas.md) | [#7](https://github.com/jfang88/PandemicGame/issues/7) |
-| T08: Atomic command execution and retry safety | T07 | not started | [Task prompt](docs/tasks/T08-atomic-command-execution-and-retry-safety.md) | [#8](https://github.com/jfang88/PandemicGame/issues/8) |
+| T07: Room persistence and protocol schemas | T06 | done | [Task prompt](docs/tasks/T07-room-persistence-and-protocol-schemas.md) | [#7](https://github.com/jfang88/PandemicGame/issues/7) |
+| T08: Atomic command execution and retry safety | T07 | in review | [Task prompt](docs/tasks/T08-atomic-command-execution-and-retry-safety.md) | [#8](https://github.com/jfang88/PandemicGame/issues/8) |
 | T09: Private lobby invites and membership | T08 | not started | [Task prompt](docs/tasks/T09-private-lobby-invites-and-membership.md) | [#9](https://github.com/jfang88/PandemicGame/issues/9) |
 | T10: Hibernating realtime and reconnect | T09 | not started | [Task prompt](docs/tasks/T10-hibernating-realtime-and-reconnect.md) | [#10](https://github.com/jfang88/PandemicGame/issues/10) |
 | T11: Microsoft Google auth and authorization | T10 | not started | [Task prompt](docs/tasks/T11-microsoft-google-auth-and-authorization.md) | [#11](https://github.com/jfang88/PandemicGame/issues/11) |
-| T12: Local playable board interface | T06 | in review | [Task prompt](docs/tasks/T12-local-playable-board-interface.md) | [#12](https://github.com/jfang88/PandemicGame/issues/12) |
+| T12: Local playable board interface | T06 | done | [Task prompt](docs/tasks/T12-local-playable-board-interface.md) | [#12](https://github.com/jfang88/PandemicGame/issues/12) |
 | T13: Connected lobby and multiplayer UI | T11, T12 | not started | [Task prompt](docs/tasks/T13-connected-lobby-and-multiplayer-ui.md) | [#13](https://github.com/jfang88/PandemicGame/issues/13) |
 | T14: Durable resume retention and compatibility | T13 | not started | [Task prompt](docs/tasks/T14-durable-resume-retention-and-compatibility.md) | [#14](https://github.com/jfang88/PandemicGame/issues/14) |
 | T15: Multiplayer browser regression suite | T14 | not started | [Task prompt](docs/tasks/T15-multiplayer-browser-regression-suite.md) | [#15](https://github.com/jfang88/PandemicGame/issues/15) |
