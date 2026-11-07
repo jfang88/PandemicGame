@@ -1,6 +1,6 @@
 # T05 — Draw infection epidemics and losses
 
-Status: in review. Dependencies: T04.
+Status: done. Dependencies: T04.
 
 ## Implementation evidence
 

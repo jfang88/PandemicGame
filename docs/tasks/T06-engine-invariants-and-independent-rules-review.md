@@ -1,6 +1,8 @@
 # T06 — Engine invariants and independent rules review
 
-Status: not started. Dependencies: T05.
+Status: in review. Dependencies: T05.
+
+See the [engine gate report](../evidence/T06.md) for test coverage and independent review.
 
 ## Read
 

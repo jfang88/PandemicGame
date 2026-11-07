@@ -10,4 +10,5 @@ export { nextUint32, randomIndex, shuffle } from './random';
 export { createGame } from './setup';
 export { assertGameInvariants } from './invariants';
 export { applyCommand } from './actions';
+export { listLegalActions } from './legal-actions';
 export type { ActionCommand, ActionError, ActionEvent, ActionResult } from './actions';

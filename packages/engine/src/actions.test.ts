@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyCommand, assertGameInvariants, createGame, type ActionCommand, type ActionError,
+import { applyCommand, assertGameInvariants, createGame, listLegalActions, type ActionCommand, type ActionError,
   type GameState, type LocationCardId, type Role } from './index';
 
 function freeze<T>(value: T): T {
@@ -53,6 +53,47 @@ const give = (cardId: LocationCardId, recipientUserId = 'other'): ActionCommand 
 const discard = (...cardIds: LocationCardId[]): ActionCommand => ({ type: 'DISCARD', payload: { cardIds } });
 const cureBlack = (...cardIds: LocationCardId[]): ActionCommand =>
   ({ type: 'DISCOVER_CURE', payload: { color: 'black', cardIds } });
+
+describe('legal action enumeration', () => {
+  it('lists each cure payment and all flight choices from a known hand', () => {
+    const cards: LocationCardId[] = ['p:D05', 'p:D06', 'p:D07', 'p:D08', 'p:E05'];
+    const state = { ...fixture('scientist', ['p:A01', ...cards]), centers: ['A01', 'B02'] };
+    const actions = listLegalActions(state, 'actor');
+    expect(actions.filter(action => action.type === 'DISCOVER_CURE')).toEqual([
+      cureBlack('p:D05', 'p:D06', 'p:D07', 'p:D08'),
+      cureBlack('p:D05', 'p:D06', 'p:D07', 'p:E05'),
+      cureBlack('p:D05', 'p:D06', 'p:D08', 'p:E05'),
+      cureBlack('p:D05', 'p:D07', 'p:D08', 'p:E05'),
+      cureBlack('p:D06', 'p:D07', 'p:D08', 'p:E05'),
+    ]);
+    expect(actions.filter(action => action.type === 'CHARTER_FLIGHT')).toHaveLength(47);
+    expect(actions.filter(action => action.type === 'DIRECT_FLIGHT')).toHaveLength(5);
+    expect(actions.filter(action => action.type === 'SHUTTLE')).toEqual([{ type: 'SHUTTLE', payload: { destination: 'B02' } }]);
+    expect(actions.filter(action => action.type === 'MOVE')).toEqual([move('A02'), move('B01')]);
+    expect(actions.filter(action => action.type === 'GIVE_CARD')).toEqual([give('p:A01')]);
+    expect(new Set(actions.map(action => JSON.stringify(action))).size).toBe(actions.length);
+    expect(actions.every(action => applyCommand(state, 'actor', action).ok)).toBe(true);
+  });
+
+  it('lists each valid discard for the recipient during a transfer pause', () => {
+    const state = accept(sharingFixture(2, 7), give('p:A01')).state;
+    const choices = listLegalActions(state, 'other');
+    expect(choices).toEqual(state.players[1]!.hand.map(card => discard(card)));
+    expect(listLegalActions(state, 'actor')).toEqual([]);
+    expect(choices.every(action => applyCommand(state, 'other', action).ok)).toBe(true);
+  });
+
+  it('lists only legal role-specific build and sharing choices', () => {
+    const builder = at(fixture('builder'), 'B01');
+    expect(listLegalActions(builder, 'actor')).toContainEqual({ type: 'BUILD_CENTER', payload: {} });
+    expect(listLegalActions({ ...builder, centers: ['A01','A02','A03','A04','A05','A06'] }, 'actor'))
+      .not.toContainEqual({ type: 'BUILD_CENTER', payload: {} });
+    const courier = fixture('courier', ['p:B01', 'p:B02']);
+    expect(listLegalActions(courier, 'actor').filter(action => action.type === 'GIVE_CARD'))
+      .toEqual([give('p:B01'), give('p:B02')]);
+    expect(listLegalActions(at(courier, 'A02'), 'actor').filter(action => action.type === 'GIVE_CARD')).toEqual([]);
+  });
+});
 
 function sharingFixture(actionsRemaining: number, handSize: number): GameState {
   const state = fixture('scientist', ['p:A01', 'p:B01']);
