@@ -6,7 +6,7 @@ All non-health API endpoints require `Authorization: Bearer <Firebase ID token>`
 
 | Method / path | Request | Result / authority |
 | --- | --- | --- |
-| GET /api/health | None | Build SHA and protocol version only; no auth needed |
+| GET /api/health | None | `{ok:true,buildSha,protocolVersion}`, public build metadata and the foundation connectivity flag |
 | POST /api/rooms | `{roomId}` UUID generated once per create attempt | Idempotently creates owned lobby, returns roomId/version; same owner retries succeed, different owner conflicts |
 | POST /api/rooms/:id/invite | `{commandId,expectedVersion}` | Owner-only LOBBY; rotate invite, persist receipt, return raw invite secret to owner only |
 | POST /api/rooms/:id/join | `{commandId,inviteSecret}` | Authenticated lobby admission, stable seat; max four; existing member returns membership without a second seat |
@@ -45,10 +45,10 @@ Accepted HTTP 200: `{protocolVersion:1, commandId, acceptedVersion, duplicate:bo
 | 401 | UNAUTHENTICATED, TOKEN_EXPIRED, INVALID_TICKET |
 | 403 | NOT_MEMBER, NOT_OWNER, INVALID_INVITE |
 | 404 / 410 | ROOM_NOT_FOUND / ROOM_EXPIRED |
-| 409 | STALE_VERSION, COMMAND_ID_REUSED, ROOM_FULL, ROOM_STARTED, ROLE_TAKEN, NOT_READY |
+| 409 | STALE_VERSION, COMMAND_ID_REUSED, ROOM_FULL, ROOM_STARTED, ROLE_TAKEN, NOT_READY, ROOM_CONFLICT |
 | 422 | ILLEGAL_ACTION, WRONG_TURN, WRONG_PHASE, GAME_FINISHED |
 | 429 | RATE_LIMITED (Retry-After) |
-| 500 / 503 | INTERNAL_ERROR, TEMPORARILY_UNAVAILABLE; no internal details |
+| 500 / 503 | INTERNAL_ERROR, TEMPORARILY_UNAVAILABLE, ROOM_INCOMPATIBLE; no internal details |
 
 Creation/join are exceptions to expectedVersion: check relevant uniqueness/capacity/idempotency atomically against current state. All other state mutations require a version. Auth failure reveals no room details. Nonmembers receive generic admission/access errors with no member names.
 

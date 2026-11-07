@@ -13,13 +13,16 @@
   "scripts": {
     "dev": "concurrently -k \"npm run dev -w @pandemic/web\" \"npm run dev -w @pandemic/worker\"",
     "lint": "eslint .",
-    "typecheck": "tsc -p packages/engine && tsc -p packages/protocol && tsc -p apps/web && tsc -p apps/worker",
+    "typecheck": "tsc -p packages/engine && tsc -p packages/protocol && tsc -p apps/web && tsc -p apps/worker && tsc -p tests/integration",
     "test:unit": "vitest run packages",
+    "test:integration": "npm run build -w @pandemic/web && vitest run --config vitest.integration.config.ts",
+    "dev:local-test": "npm run build -w @pandemic/web && npm run dev:local-test -w @pandemic/worker",
     "build": "npm run build -w @pandemic/web && npm run build -w @pandemic/worker",
     "check:docs": "python3 scripts/validate_build_kit.py && python3 scripts/test_validate_build_kit.py",
     "test:smoke": "node scripts/smoke-foundation.mjs"
   },
   "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.6.0",
     "@eslint/js": "9.39.1",
     "@types/node": "22.15.30",
     "concurrently": "9.2.1",
