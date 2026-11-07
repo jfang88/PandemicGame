@@ -1,14 +1,16 @@
 # Implementation backlog
 
-T01 foundation completion is **in review**; see [verification evidence](docs/evidence/T01.md).
-All other tasks are **not started**. This is a local foundation, not a playable game.
-Dependencies are authoritative: T02 remains blocked until T01 completion passes review/CI and merges.
-Mark done only after merge and gate evidence. Record missing provider setup as blocked rather than passed.
+T01 is **done**: [PR #22](https://github.com/jfang88/PandemicGame/pull/22) merged and
+[its final CI run](https://github.com/jfang88/PandemicGame/actions/runs/42205990830) passed.
+T02 is **in review**; see [setup verification](docs/evidence/T02.md).
+T03–T18 are **not started**. Dependencies are authoritative; merge reviewed work before
+starting its dependents. The first parallel task split is T07 (backend) and T12 (local UI),
+after T06 merges. Independent reference calculations and read-only review can run alongside implementation.
 
 | Task | Dependencies | Status | Specification | GitHub issue |
 | --- | --- | --- | --- | --- |
-| T01: Workspace and CI foundation | — | in review | [Task prompt](docs/tasks/T01-workspace-and-ci-foundation.md) | [#1](https://github.com/jfang88/PandemicGame/issues/1) |
-| T02: State types and deterministic setup | T01 | not started | [Task prompt](docs/tasks/T02-state-types-and-deterministic-setup.md) | [#2](https://github.com/jfang88/PandemicGame/issues/2) |
+| T01: Workspace and CI foundation | — | done | [Task prompt](docs/tasks/T01-workspace-and-ci-foundation.md) | [#1](https://github.com/jfang88/PandemicGame/issues/1) |
+| T02: State types and deterministic setup | T01 | in review | [Task prompt](docs/tasks/T02-state-types-and-deterministic-setup.md) | [#2](https://github.com/jfang88/PandemicGame/issues/2) |
 | T03: Movement treatment and construction | T02 | not started | [Task prompt](docs/tasks/T03-movement-treatment-and-construction.md) | [#3](https://github.com/jfang88/PandemicGame/issues/3) |
 | T04: Sharing cures and discard continuations | T03 | not started | [Task prompt](docs/tasks/T04-sharing-cures-and-discard-continuations.md) | [#4](https://github.com/jfang88/PandemicGame/issues/4) |
 | T05: Draw infection epidemics and losses | T04 | not started | [Task prompt](docs/tasks/T05-draw-infection-epidemics-and-losses.md) | [#5](https://github.com/jfang88/PandemicGame/issues/5) |
@@ -39,4 +41,4 @@ Machine-readable task dependencies and acceptance criteria: [spec/tasks.json](sp
 
 ## Architecture baseline
 
-Use Cloudflare Workers Free + SQLite Durable Objects for the game and Firebase Authentication Spark for Google/Microsoft login. T11 and T17 specify the identity implementation/setup; all task IDs and dependencies are unchanged. T01 foundation completion is in review; all later tasks remain not started. Firebase UID is not a UUID, and the backend verifies Firebase ID tokens using fixed Google certificates. See [AUTH.md](docs/AUTH.md).
+Use Cloudflare Workers Free + SQLite Durable Objects for the game and Firebase Authentication Spark for Google/Microsoft login. T11 and T17 specify the identity implementation/setup; all task IDs and dependencies are unchanged. T01 is complete and T02 is in review; later tasks remain not started. Firebase UID is not a UUID, and the backend verifies Firebase ID tokens using fixed Google certificates. See [AUTH.md](docs/AUTH.md).

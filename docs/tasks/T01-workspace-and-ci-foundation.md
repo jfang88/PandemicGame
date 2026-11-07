@@ -1,11 +1,11 @@
 # T01 — Workspace and CI foundation
 
-Status: in review. Dependencies: none.
+Status: done. Dependencies: none.
 
 Completion branch: `agent/T01-complete-foundation` (the original scaffold branch was already merged).
-Dependency compatibility, lockfile, local startup and CI foundation are implemented in this follow-up. Browser acceptance passed the CI smoke check; review and merge remain pending.
+Dependency compatibility, lockfile, local startup and CI foundation are implemented in this follow-up. Browser acceptance passed the CI smoke check; PR #22 merged and final CI passed.
 See [verification evidence](../evidence/T01.md) for actual checks and limitations.
-Keep T02 blocked until this completion PR passes review/CI and merges.
+T02 is unblocked; see the merged [completion PR](https://github.com/jfang88/PandemicGame/pull/22).
 
 ## Read
 

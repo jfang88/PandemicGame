@@ -1,0 +1,62 @@
+import { loadBoard } from './board';
+import { validateSeed } from './random';
+import { BOARD_VERSION, COLORS, ROLES, RULES_VERSION, type GameState } from './types';
+
+function invariant(condition: unknown, message: string): asserts condition {
+  if (!condition) throw new Error(`Game invariant: ${message}`);
+}
+function integer(value: number, min: number, max: number): boolean {
+  return Number.isInteger(value) && value >= min && value <= max;
+}
+function sameCards(actual: readonly string[], expected: readonly string[], label: string): void {
+  invariant(actual.length === expected.length && new Set(actual).size === expected.length
+    && actual.every(card => expected.includes(card)), `${label} conservation`);
+}
+/** T02 structural/conservation checks, not an untrusted snapshot parser.
+ * T04/T05 will extend continuation/hand-limit and terminal semantics; T06 audits all rules.
+ * Automatic resolvers must restore removed cards before calling.
+ */
+export function assertGameInvariants(state: GameState): void {
+  invariant(state.schemaVersion === 1 && state.rulesVersion === RULES_VERSION
+    && state.boardVersion === BOARD_VERSION, 'versions');
+  validateSeed(state.rngState);
+  const board = loadBoard();
+  const ids = board.locations.map(location => location.id);
+  invariant(state.players.length >= 2 && state.players.length <= 4, 'player count');
+  for (const key of ['userId', 'seat', 'role'] as const) {
+    invariant(new Set(state.players.map(player => player[key])).size === state.players.length, `unique ${key}`);
+  }
+  for (const player of state.players) {
+    invariant(typeof player.userId === 'string' && player.userId.length >= 1 && player.userId.length <= 128, 'UID');
+    invariant(integer(player.seat, 0, 3) && ROLES.includes(player.role) && ids.includes(player.locationId), 'player');
+  }
+  invariant(state.players.every((player, index) => index === 0 || state.players[index - 1]!.seat < player.seat), 'seat order');
+  invariant(state.players.some(player => player.seat === state.activeSeat), 'active seat');
+  invariant(integer(state.actionsRemaining, 0, 4), 'actions remaining');
+  invariant(integer(state.outbreakCount, 0, 8) && integer(state.rateIndex, 0, 6), 'counters');
+  invariant(Object.keys(state.cubes).length === 48 && ids.every(id => Object.hasOwn(state.cubes, id)), 'board locations');
+  invariant(new Set(state.centers).size === state.centers.length && state.centers.length >= 1
+    && state.centers.length <= 6 && state.centers.every(id => ids.includes(id)), 'centers');
+  for (const color of COLORS) {
+    let total = state.supply[color];
+    invariant(integer(total, 0, 24) && typeof state.cured[color] === 'boolean', 'supply and cures');
+    for (const id of ids) {
+      const count = state.cubes[id]![color];
+      invariant(integer(count, 0, 3), 'cube bounds');
+      total += count;
+    }
+    invariant(total === 24, `cube conservation ${color}`);
+  }
+  sameCards([...state.infectionDeck, ...state.infectionDiscard], ids.map(id => `i:${id}`), 'infection cards');
+  const playerCards = [...state.playerDeck, ...state.playerDiscard, ...state.players.flatMap(player => player.hand)];
+  invariant(state.playerDiscard.every(card => card.startsWith('p:'))
+    && state.players.every(player => player.hand.every(card => card.startsWith('p:'))), 'location-only hands/discard');
+  sameCards(playerCards.filter(card => !card.startsWith('e:')), ids.map(id => `p:${id}`), 'player location cards');
+  sameCards([...playerCards.filter(card => card.startsWith('e:')), ...state.resolvedEpidemics], ['e:1', 'e:2', 'e:3', 'e:4'], 'epidemics');
+  invariant(['ACTIONS', 'DRAW', 'DISCARD_REQUIRED', 'INFECTION', 'WON', 'LOST'].includes(state.phase), 'phase');
+  invariant((state.phase === 'DISCARD_REQUIRED') === (state.continuation !== null), 'continuation phase');
+  invariant((state.phase === 'WON' || state.phase === 'LOST') === (state.outcome !== null), 'outcome phase');
+  if (state.phase === 'ACTIONS') invariant(state.actionsRemaining >= 1, 'action phase budget');
+  if (state.phase === 'WON') invariant(state.outcome?.kind === 'won' && COLORS.every(color => state.cured[color]), 'win');
+  if (state.phase === 'LOST') invariant(state.outcome?.kind === 'lost', 'loss');
+}

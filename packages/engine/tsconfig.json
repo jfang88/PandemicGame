@@ -2,9 +2,12 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
-    "tsBuildInfoFile": "../../node_modules/.cache/engine.tsbuildinfo"
+    "tsBuildInfoFile": "../../node_modules/.cache/engine.tsbuildinfo",
+    "resolveJsonModule": true,
+    "rootDir": "../.."
   },
   "include": [
-    "src"
+    "src",
+    "../../spec/board.v1.json"
   ]
 }

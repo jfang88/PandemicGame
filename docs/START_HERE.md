@@ -43,4 +43,4 @@ The rules in RULES.md are selected defaults so work can begin immediately. Futur
 
 ## Selected low-cost identity design
 
-Firebase Authentication Spark is the sole login provider. All game hosting/storage stays on Cloudflare Free initially. Two infrequent players are the capacity baseline; 2–4-player support remains required. Task IDs and dependencies are stable, and T01 foundation completion is in review and T02–T18 remain not started. There are no existing users/data to migrate. See AUTH.md before T11 and CLOUDFLARE.md before T17.
+Firebase Authentication Spark is the sole login provider. All game hosting/storage stays on Cloudflare Free initially. Two infrequent players are the capacity baseline; 2–4-player support remains required. Task IDs and dependencies are stable, and T01 is complete, T02 deterministic setup is in review, and T03–T18 remain not started. There are no existing users/data to migrate. See AUTH.md before T11 and CLOUDFLARE.md before T17.
