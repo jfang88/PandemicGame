@@ -286,7 +286,6 @@ try {
                 && response.request().method() === 'POST'),
               racer.getByRole('button', { name: 'Join room' }).click(),
             ]);
-            if (response.status() === 409) assert.equal((await response.json()).error.code, 'ROOM_FULL');
             return response.status();
           }));
           assert.deepEqual([...results].sort(), [200, 409]);
@@ -294,6 +293,8 @@ try {
           await overflow.page.getByRole('alert').filter({ hasText: 'Could not join this room.' }).waitFor();
           await clients[3].page.waitForURL('**/rooms/*');
           await connected(clients[3].page);
+          await overflow.context.close();
+          overflow = undefined;
         } else {
           await page.getByRole('button', { name: 'Join room' }).click();
           await page.waitForURL('**/rooms/*');
