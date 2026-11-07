@@ -1,0 +1,60 @@
+:root {
+  color-scheme: dark;
+  font-family: system-ui, sans-serif;
+  color: #eff6f8;
+  background: #101b26;
+  line-height: 1.5;
+}
+body { margin: 0; }
+h1, h2, h3, p { margin: 0; }
+h1 { font-size: clamp(1.8rem, 4vw, 2.75rem); line-height: 1.1; }
+h2 { font-size: 1.2rem; }
+h3 { font-size: 1rem; }
+.eyebrow { margin-bottom: .4rem; color: #a5e5d7; font-size: .75rem; letter-spacing: .13em; }
+.play-shell { max-width: 90rem; margin: auto; padding: clamp(.75rem, 2.5vw, 2rem); }
+.setup-shell { max-width: 29rem; margin: 8vh auto; padding: 1rem; }
+.setup-shell form { display: grid; gap: .75rem; margin-top: 1rem; }
+.setup-shell > p:last-of-type { margin-top: .75rem; }
+.game-heading { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: space-between; align-items: center; }
+section, dialog { background: #1b2a38; border: 1px solid #456074; border-radius: .75rem; padding: .9rem; }
+.play-shell > section { margin-top: 1rem; }
+.status-banner { border-left: .25rem solid #73e3bf; }
+.play-grid { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(15rem, 1fr); gap: .8rem; margin-top: .8rem; }
+aside { display: grid; gap: .8rem; align-content: start; }
+.board-scroll { overflow: auto; border-radius: .4rem; margin: .5rem 0; background: #121f2a; }
+.game-board { display: block; width: 100%; min-width: 35rem; }
+.grid-link { stroke: #577487; stroke-width: 2; }
+.map-location { cursor: pointer; }
+.map-location text { fill: #fff; text-anchor: middle; font-size: 14px; font-weight: 700; }
+.map-location .threat-count { fill: #ffe4a5; font-size: 13px; }
+.map-location .pawn-count { fill: #b6ffe2; font-size: 13px; }
+.map-location rect { stroke: #9eb0b9; stroke-width: 1; }
+.map-location.selected rect { stroke: #fafafa; stroke-width: 3; }
+.home-blue { fill: #214f78; background: #569cda; }
+.home-yellow { fill: #625025; background: #d8b458; }
+.home-red { fill: #733b4b; background: #e08099; }
+.home-black { fill: #414753; background: #8995a6; }
+.legend, .location-details, .player-panel p, .action-controls p { color: #d3e0e7; font-size: .9rem; }
+.location-details { margin-top: .4rem; }
+.field { display: grid; gap: .2rem; font-weight: 650; }
+button, select { font: inherit; min-height: 2.65rem; border: 1px solid #91a8b8; border-radius: .35rem; padding: .3rem .6rem; }
+select { max-width: 100%; min-width: 0; width: 100%; color: inherit; background: #101b26; }
+button { color: #0d2723; background: #a4edda; border-color: #a4edda; font-weight: 750; cursor: pointer; }
+button:disabled { opacity: .55; cursor: default; }
+:focus-visible { outline: 3px solid #ffe083; outline-offset: 3px; }
+.action-controls { display: grid; gap: .55rem; margin-top: .55rem; }
+.stats { display: grid; gap: .25rem; margin: .6rem 0; }
+.stats div { display: flex; gap: .5rem; justify-content: space-between; }
+.stats dd { margin: 0; }
+.supply, .cards { list-style: none; padding: 0; margin: .4rem 0; }
+.supply li { text-transform: capitalize; }
+.swatch { display: inline-block; width: .65em; height: .65em; border-radius: .15em; margin-right: .5em; }
+.player-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: .65rem; margin-top: .6rem; }
+.player-panel { background: #14212c; border-radius: .4rem; padding: .6rem; }
+.role { text-transform: capitalize; }
+.cards { display: flex; gap: .25rem; flex-wrap: wrap; }
+.cards li { padding: .2rem .35rem; border: 1px solid #647f93; border-radius: .2rem; font-size: .8rem; }
+dialog { color: inherit; max-width: min(32rem, calc(100vw - 3rem)); }
+dialog::backdrop { background: #050a12c9; }
+.discard-options { display: flex; gap: .45rem; flex-wrap: wrap; margin-top: .75rem; }
+@media (max-width: 48rem) { .play-grid { grid-template-columns: minmax(0, 1fr); } }
