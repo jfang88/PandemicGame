@@ -16,7 +16,7 @@ Test Firebase Secure Token certificate retrieval using controlled RS256-signed t
 
 Playwright independent browser contexts (one context per identity, not tabs sharing storage). Matrix: 2, 3, 4 players; primary CI browser Chromium, Firefox/WebKit smoke where practical. Test invite/login return path, lobby capacity/readiness, legal and rejected actions, hand-limit UI, terminal outcome, refresh/offline/reconnect, two tabs for one identity, duplicate/stale snapshots and session expiry.
 
-Local fixture creation is test-only and excluded from deployment. Pin test seed and use deterministic bounded action drivers; include visible interactions instead of sending every action directly through API. Use API setup helpers only to isolate scenarios. T15 runs with `npm run test:e2e` after installing Playwright Chromium. Failures write a short scenario and revision report with masked screenshots under `test-results/connected-regression/`. CI uploads these files for seven days. The suite omits network traces because room requests and sockets carry invite secrets and tickets. Do not disable an assertion to hide a flaky test; isolate and fix race conditions.
+Local fixture creation is test-only and excluded from deployment. Pin test seed and use deterministic bounded action drivers; include visible interactions instead of sending every action directly through API. Use API setup helpers only to isolate scenarios. T15 runs with `npm run test:e2e` after installing Playwright Chromium. Failures write a short scenario and revision report with masked screenshots under `test-results/connected-regression/`. CI uploads these files for seven days. The suite omits network traces because room requests and sockets carry invite secrets and tickets. Do not disable an assertion to hide a flaky test; isolate and fix race conditions. `npm run test:local-play` covers the local hot-seat board at tablet and phone widths.
 
 ## Layer 4: staging/release
 
@@ -31,7 +31,7 @@ Rehearse compatible deployment/rollback and schema migration on stored fixtures.
 - T06: independent engine review against RULES.md.
 - T08: transaction/retry fault tests mandatory.
 - T11/T16: authorization and production-bypass tests mandatory.
-- T18: all acceptance IDs traced to tests/manual evidence; unresolved required gates block release.
+- T18: all acceptance IDs traced to tests/manual evidence; unresolved required gates block release. `npm run check:docs` enforces the [traceability matrix](TRACEABILITY.md).
 
 No coverage percentage alone establishes correctness. Missing suites are marked not implemented, never reported as passed. Build-kit delivery itself only validates documentation, task dependencies and board data; application/runtime tests start with implementation tasks.
 

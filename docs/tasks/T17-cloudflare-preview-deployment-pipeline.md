@@ -1,6 +1,6 @@
 # T17 — Cloudflare preview deployment pipeline
 
-Status: pipeline in review, live preview pending. Dependencies: T16.
+Status: pipeline merged in [PR #39](https://github.com/jfang88/PandemicGame/pull/39), live preview pending. Dependencies: T16.
 
 Use the [preview deployment evidence sheet](../evidence/T17.md) for the live gates.
 

@@ -1,6 +1,8 @@
 # T18 — Release readiness and owner handoff
 
-Status: not started. Dependencies: T17.
+Status: in review; hosted gates pending. Dependencies: T17.
+
+See the [release guide](../RELEASE.md), the [traceability matrix](../TRACEABILITY.md) and the [release readiness report](../evidence/T18.md).
 
 ## Read
 
