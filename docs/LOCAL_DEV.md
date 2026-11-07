@@ -47,4 +47,9 @@ curl -H 'x-pandemic-test-uid: local-owner' \
 
 Dependency changes must regenerate the single root lockfile with `npm install`, then
 pass `npm ci` and the checks above. Do not use force/legacy-peer-deps to conceal conflicts.
+npm blocks dependency install scripts unless the `allowScripts` field in `package.json` approves them.
+The current entries deny the `workerd`, `esbuild`, `protobufjs` and `@firebase/util` scripts, which the
+project does not need. If a new dependency brings an install script, read it, then record a decision with
+`npm install-scripts approve <pkg>` or `npm install-scripts deny <pkg>`. `npm run check:install-scripts`
+fails in CI until every install script has a decision.
 The browser smoke check in [T01 evidence](evidence/T01.md) covers the foundation screen and Worker connectivity.

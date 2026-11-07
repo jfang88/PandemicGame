@@ -17,6 +17,7 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
+      - run: npm run check:install-scripts
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test:unit
@@ -24,7 +25,7 @@ jobs:
       - run: npm run build
       - run: node scripts/check-worker-test-isolation.mjs
       - run: npm run check:docs
-      - run: node --test scripts/deployment-policy.test.mjs
+      - run: node --test scripts/deployment-policy.test.mjs scripts/install-scripts-policy.test.mjs
       - run: npm run validate:deployment -- preview
       - run: npm run validate:deployment -- production
       - name: Install Chromium for foundation smoke

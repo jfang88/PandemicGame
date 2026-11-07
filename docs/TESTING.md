@@ -26,7 +26,7 @@ Rehearse compatible deployment/rollback and schema migration on stored fixtures.
 
 ## CI gates
 
-- Every PR: docs/board validation, lint, typecheck, unit and applicable integration suites, build.
+- Every PR: docs/board validation, lint, typecheck, unit and applicable integration suites, build, and an explicit `allowScripts` decision for every dependency install script.
 - UI/multiplayer PRs: relevant Playwright suite plus full suite before release.
 - T06: independent engine review against RULES.md.
 - T08: transaction/retry fault tests mandatory.
