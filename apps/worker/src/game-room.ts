@@ -50,29 +50,41 @@ function inviteMatches(expected: string | null, actual: string): boolean {
 
 export class GameRoom extends RealtimeRoom {
   protected compatible = false;
+  /** False until a room is created here, so requests for unknown IDs leave no storage behind. */
+  protected initialized = false;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     void ctx.blockConcurrencyWhile(async () => {
-      this.compatible = ctx.storage.transactionSync(() => {
-        const sql = ctx.storage.sql;
-        sql.exec('CREATE TABLE IF NOT EXISTS metadata (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), version INTEGER NOT NULL)');
-        const metadata = sql.exec<{ version: number }>('SELECT version FROM metadata WHERE singleton = 1').toArray()[0];
-        if (metadata?.version === STORAGE_VERSION) return true;
-        if (metadata && ![1, 2, 3, 4, 5].includes(metadata.version)) return false;
-        if (!metadata || metadata.version < 4) this.migrateLegacyStorage(metadata?.version);
-        sql.exec('CREATE TABLE IF NOT EXISTS retirement (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), untilMs INTEGER)');
-        sql.exec('CREATE TABLE IF NOT EXISTS room_limits (scope TEXT PRIMARY KEY NOT NULL, readyAt INTEGER NOT NULL)');
-        sql.exec('CREATE INDEX IF NOT EXISTS room_limits_expiry ON room_limits (readyAt)');
-        sql.exec(`INSERT INTO metadata (singleton, version) VALUES (1, ?)
-          ON CONFLICT (singleton) DO UPDATE SET version = excluded.version`, STORAGE_VERSION);
-        return true;
-      });
+      this.initialized = ctx.storage.sql.exec(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'metadata'",
+      ).toArray().length > 0;
+      if (!this.initialized) {
+        this.compatible = true;
+        return;
+      }
+      this.compatible = ctx.storage.transactionSync(() => this.migrateStorage());
       if (this.compatible) {
         const alarm = await ctx.storage.getAlarm();
         if (alarm === null || this.retentionDeadline(Date.now()) < alarm) await this.scheduleExpiry();
       }
     });
+  }
+
+  /** Call inside a transaction. Creates or upgrades the schema and reports whether this build can read it. */
+  private migrateStorage(): boolean {
+    const sql = this.ctx.storage.sql;
+    sql.exec('CREATE TABLE IF NOT EXISTS metadata (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), version INTEGER NOT NULL)');
+    const metadata = sql.exec<{ version: number }>('SELECT version FROM metadata WHERE singleton = 1').toArray()[0];
+    if (metadata?.version === STORAGE_VERSION) return true;
+    if (metadata && ![1, 2, 3, 4, 5].includes(metadata.version)) return false;
+    if (!metadata || metadata.version < 4) this.migrateLegacyStorage(metadata?.version);
+    sql.exec('CREATE TABLE IF NOT EXISTS retirement (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), untilMs INTEGER)');
+    sql.exec('CREATE TABLE IF NOT EXISTS room_limits (scope TEXT PRIMARY KEY NOT NULL, readyAt INTEGER NOT NULL)');
+    sql.exec('CREATE INDEX IF NOT EXISTS room_limits_expiry ON room_limits (readyAt)');
+    sql.exec(`INSERT INTO metadata (singleton, version) VALUES (1, ?)
+      ON CONFLICT (singleton) DO UPDATE SET version = excluded.version`, STORAGE_VERSION);
+    return true;
   }
 
   private migrateLegacyStorage(version: number | undefined): void {
@@ -115,6 +127,7 @@ export class GameRoom extends RealtimeRoom {
   }
 
   private retirement(): { untilMs: number | null } | undefined {
+    if (!this.initialized) return undefined;
     return this.ctx.storage.sql.exec<{ untilMs: number | null }>(
       'SELECT untilMs FROM retirement WHERE singleton = 1',
     ).toArray()[0];
@@ -149,6 +162,7 @@ export class GameRoom extends RealtimeRoom {
   }
 
   protected expireRetention(now: number): boolean {
+    if (!this.initialized) return false;
     return this.ctx.storage.transactionSync(() => {
       const sql = this.ctx.storage.sql;
       const room = this.room();
@@ -171,6 +185,7 @@ export class GameRoom extends RealtimeRoom {
   }
 
   private room(): RoomRow | undefined {
+    if (!this.initialized) return undefined;
     return this.ctx.storage.sql.exec<RoomRow>(`SELECT roomId, schemaVersion, rulesVersion, boardVersion,
       revision, lifecycle, ownerUserId, expiresAt, inviteHash, gameJson FROM room WHERE singleton = 1`).toArray()[0];
   }
@@ -194,7 +209,9 @@ export class GameRoom extends RealtimeRoom {
 
   async create(roomId: string, ownerUserId: string, displayName = 'Player'): Promise<CreateResult> {
     if (!this.compatible) return { code: this.mayReportIncompatibility(ownerUserId) ? 'ROOM_INCOMPATIBLE' : 'ROOM_CONFLICT' };
+    const initializing = !this.initialized;
     const result = this.ctx.storage.transactionSync<CreateResult>(() => {
+      if (initializing) this.migrateStorage();
       const existing = this.room();
       if (existing) {
         if (existing.ownerUserId !== ownerUserId) return { code: 'ROOM_CONFLICT' };
@@ -217,6 +234,8 @@ export class GameRoom extends RealtimeRoom {
         VALUES (?, 0, ?, NULL, 0, ?)`, ownerUserId, sanitizeDisplayName(displayName), timestamp);
       return { roomId, version: 0 };
     });
+    // The schema committed with the room, so later requests may read it.
+    this.initialized = true;
     if (!('code' in result)) await this.scheduleExpiry();
     return result;
   }

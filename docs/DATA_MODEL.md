@@ -46,7 +46,7 @@ Never include internal decks, rngState, inviteHash, socket tickets, command hash
 
 ## Migration and restart
 
-Schema migration runs once on initialization using serialized startup and a transaction. Store old-version fixture snapshots and test upgrading. Storage metadata v5 adds a retirement record without rewriting the room snapshot. Its timestamp supplies the temporary 410 period. Clearing the timestamp leaves an anonymous marker inside the existing Durable Object so retries cannot reclaim its UUID. Never regenerate a deck on restart. Unknown rulesVersion freezes mutation with a clear upgrade-required response until a compatible engine is deployed. Deploy backward-compatible readers before new writers. Rolling back code does not roll back database writes; test compatibility before rollback and never delete a namespace to “fix” migration errors.
+Schema migration runs once on initialization using serialized startup and a transaction. A new room creates its schema inside the create transaction; an object that never held a room keeps no tables. Store old-version fixture snapshots and test upgrading. Storage metadata v5 adds a retirement record without rewriting the room snapshot. Its timestamp supplies the temporary 410 period. Clearing the timestamp leaves an anonymous marker inside the existing Durable Object so retries cannot reclaim its UUID. Never regenerate a deck on restart. Unknown rulesVersion freezes mutation with a clear upgrade-required response until a compatible engine is deployed. Deploy backward-compatible readers before new writers. Rolling back code does not roll back database writes; test compatibility before rollback and never delete a namespace to “fix” migration errors.
 
 ## Recovery scope
 
