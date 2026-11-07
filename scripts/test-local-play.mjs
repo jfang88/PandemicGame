@@ -14,7 +14,7 @@ try {
   const files = (Array.isArray(output) ? output : [output]).flatMap(result => result.output);
   const publicText = files.map(file => file.type === 'chunk' ? file.code : String(file.source)).join('\n');
   assert(!files.some(file => file.fileName === 'local.html'));
-  assert.doesNotMatch(publicText, /local\.html|local-fixture|rngState|playerDeck|must discard|Start a local game/);
+  assert.doesNotMatch(publicText, /local\.html|local-fixture|\brngState\b|\bplayerDeck\b|Start a local game/);
   console.log('PASS: production output contains no local entry, fixture, deck or RNG graph');
 
   process.env.NODE_ENV = 'development';

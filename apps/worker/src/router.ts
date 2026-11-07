@@ -77,6 +77,25 @@ async function readJson(request: Request): Promise<unknown> {
   }
 }
 
+async function emptyBody(request: Request): Promise<boolean> {
+  if (!request.body) return true;
+  const reader = request.body.getReader();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return true;
+      if (value.byteLength > 0) {
+        await reader.cancel();
+        return false;
+      }
+    }
+  } catch {
+    return false;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 export async function route(request: Request, env: Env,
   identity: RequestIdentity | { readonly code: 'UNAUTHENTICATED' | 'TOKEN_EXPIRED' } | null = null): Promise<Response> {
   const { pathname } = new URL(request.url);
@@ -111,7 +130,7 @@ export async function route(request: Request, env: Env,
     const stub = env.GAME_ROOMS.getByName(roomId.toLowerCase());
     if (mutation?.[2] === 'ws-ticket') {
       const origin = allowedSocketOrigin(request, env);
-      if (!origin || request.body) return reject('BAD_REQUEST');
+      if (!origin || !await emptyBody(request)) return reject('BAD_REQUEST');
       const result = await stub.issueSocketTicket(userId, origin, authExpiresAt);
       return 'code' in result ? reject(result.code) : json(result);
     }
