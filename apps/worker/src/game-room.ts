@@ -1,5 +1,5 @@
 import { applyCommand, assertGameInvariants, BOARD_VERSION, RULES_VERSION, type GameState } from '@pandemic/engine';
-import { projectRoom, PROTOCOL_VERSION, type CommandAcceptance, type CommandEnvelope, type CommandReceipt,
+import { projectRoom, PROTOCOL_VERSION, sanitizeDisplayName, type CommandAcceptance, type CommandEnvelope, type CommandReceipt,
   type ErrorCode, type InviteAcceptance, type PublicRoomSnapshot, type RoomEventData, type RoomMember } from '@pandemic/protocol';
 import { commandHash, requestHash, sha256 } from './command-hash';
 import { applyLobbyCommand, gameSeed, isLobbyCommand } from './lobby';
@@ -120,7 +120,7 @@ export class GameRoom extends RealtimeRoom {
     }
   }
 
-  create(roomId: string, ownerUserId: string): CreateResult {
+  create(roomId: string, ownerUserId: string, displayName = 'Player'): CreateResult {
     if (!this.compatible) return { code: this.mayReportIncompatibility(ownerUserId) ? 'ROOM_INCOMPATIBLE' : 'ROOM_CONFLICT' };
     return this.ctx.storage.transactionSync(() => {
       const existing = this.room();
@@ -140,7 +140,7 @@ export class GameRoom extends RealtimeRoom {
       roomId, SCHEMA_VERSION, RULES_VERSION, BOARD_VERSION, ownerUserId, timestamp, timestamp,
       new Date(now + 7 * DAY_MS).toISOString());
       sql.exec(`INSERT INTO members (userId, seat, displayName, role, ready, joinedAt)
-        VALUES (?, 0, 'Player', NULL, 0, ?)`, ownerUserId, timestamp);
+        VALUES (?, 0, ?, NULL, 0, ?)`, ownerUserId, sanitizeDisplayName(displayName), timestamp);
       return { roomId, version: 0 };
     });
   }
@@ -289,7 +289,7 @@ export class GameRoom extends RealtimeRoom {
     });
   }
 
-  async join(userId: string, commandId: string, inviteSecret: string): Promise<CommandAcceptance | Failure> {
+  async join(userId: string, commandId: string, inviteSecret: string, displayName = 'Player'): Promise<CommandAcceptance | Failure> {
     const [hash, inviteHash] = await Promise.all([
       requestHash({ type: 'JOIN_ROOM', protocolVersion: PROTOCOL_VERSION, inviteSecret }),
       sha256(inviteSecret),
@@ -323,7 +323,7 @@ export class GameRoom extends RealtimeRoom {
       const revision = room.revision + 1;
       const sql = this.ctx.storage.sql;
       sql.exec(`INSERT INTO members (userId, seat, displayName, role, ready, joinedAt)
-        VALUES (?, ?, 'Player', NULL, 0, ?)`, userId, seat, timestamp);
+        VALUES (?, ?, ?, NULL, 0, ?)`, userId, seat, sanitizeDisplayName(displayName), timestamp);
       sql.exec('UPDATE members SET ready = 0');
       this.writeLobby(room, revision, now, room.ownerUserId);
       this.recordEvents([{ type: 'MEMBER_JOINED', userId }], revision, timestamp);

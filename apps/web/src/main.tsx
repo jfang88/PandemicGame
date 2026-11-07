@@ -1,6 +1,9 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+import { roomPath } from './auth/session';
 import './style.css';
+
+const AuthApp = React.lazy(() => import('./auth/app'));
 
 function App() {
   const [health, setHealth] = React.useState('Checking local Worker…');
@@ -22,10 +25,16 @@ function App() {
     <section aria-label="Development status">
       <strong>Foundation preview</strong>
       <p>{health}</p>
-      <p>Accounts and connected rooms will arrive in later tasks.</p>
+      <p>The connected room interface will arrive in a later task.</p>
+      <p><a href="/login">Sign in</a></p>
       {import.meta.env.DEV && <p><a href="/local.html">Play a local game</a></p>}
     </section>
   </main>;
 }
 
-createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
+const authRoute = location.pathname === '/login' || roomPath(location.pathname) !== null;
+createRoot(document.getElementById('root')!).render(<React.StrictMode>
+  {authRoute ? <React.Suspense fallback={<main><p role="status">Loading sign-in…</p></main>}>
+    <AuthApp />
+  </React.Suspense> : <App />}
+</React.StrictMode>);

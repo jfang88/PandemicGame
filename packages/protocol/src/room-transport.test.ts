@@ -143,6 +143,18 @@ it('recovers a leave receipt when socket access ends before the HTTP acknowledge
   expect(client.transport.getState().online).toBe(false);
 });
 
+it('force-refreshes a rejected token once and submits the same command envelope', async () => {
+  const client = fixture((_request, attempt) => attempt === 1
+    ? Response.json({ error: { code: 'TOKEN_EXPIRED', message: 'Expired.' } }, { status: 401 })
+    : Response.json({ protocolVersion: 1, commandId: firstId, acceptedVersion: 3, duplicate: true, snapshot: snapshot(3) }));
+  await vi.waitFor(() => expect(client.sockets).toHaveLength(1));
+  client.sockets[0]!.snapshot(2);
+  expect(await client.transport.submit(pass)).toMatchObject({ ok: true, receipt: { commandId: firstId } });
+  expect(client.tokens).toEqual([false, false, true]);
+  expect(client.requests).toHaveLength(2);
+  expect(client.requests[1]!.body).toBe(client.requests[0]!.body);
+});
+
 it('cancels a stalled token request on stop and allows a new submission after restart', async () => {
   const client = fixture(() => Response.json({
     protocolVersion: 1, commandId: nextId, acceptedVersion: 3, duplicate: false, snapshot: snapshot(3),

@@ -52,7 +52,7 @@ Mandatory validation:
 | auth_time | In past |
 | nbf | If present, not in future |
 
-Allow at most 60 seconds documented clock tolerance for clock claims. Do not accept missing mandatory claims, arbitrary Firebase projects or issuer/audience claims merely decoded without signature validation. Recheck room membership per request. Sanitize and bound display names; never authorize by email/name. A small independently tested verifier wrapper should expose a trusted userId, sanitized optional displayName and token expiry only.
+The verifier applies zero clock tolerance. It derives socket expiry directly from the verified `exp`. A shared certificate refresh coalesces concurrent requests, allows a new unknown-key refresh at most once per 30 seconds and backs off for five seconds after a fetch failure. It retains an already cached key only through its original expiry. Room membership uses the exact verified UID. The trusted identity contains only UID, token expiry and an optional sanitized display name.
 
 ## Sessions, sockets and revocation
 
@@ -63,6 +63,8 @@ Firebase ID tokens normally last about one hour; let SDK refresh them. Bind each
 Use a separate loopback-only test entry point with deterministic signed test identities and mock certificate fetches. Firebase Auth Emulator is optional for SDK tests only; its unsigned tokens must never be accepted by preview/production. Never put FIREBASE_AUTH_EMULATOR_HOST, test keys, emulator adapters or local bypass imports into the deployed bundle. Test tokens use Firebase-shaped claims and opaque non-UUID UIDs. Test malformed/expired tokens, wrong project, missing/future iat/auth_time, unexpected algorithms, unknown kid, cache expiry, rotation, key-fetch failures and nonmember room access.
 
 Real-provider staging checks remain mandatory at T17. Local tests are not proof that OAuth settings or third-party browser behavior work. No production credentials are needed for T11 automated tests.
+
+Use `npm run test:auth-smoke` for the configured build check and simulated popup recovery in Chromium. The production browser initializes Firebase Auth explicitly with supported persistence and popup resolution. It temporarily stores a validated invite in sessionStorage for up to ten minutes and removes the fragment from the address bar. A successful join or explicit cancel clears the invite. Join retries use the initiating UID and the original command ID.
 
 ## Cost and availability
 
