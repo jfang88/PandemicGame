@@ -63,7 +63,8 @@ try {
   await page.keyboard.press('ArrowDown');
   await page.getByText('Blue Station A02 · No research center', { exact: false }).waitFor();
   await page.getByRole('button', { name: 'Move', exact: true }).press('Enter');
-  await cardCount(1).getByText(/Blue Station A02/).waitFor();
+  // The random deal can put the A02 card in this hand too, so match only the location line.
+  await cardCount(1).getByText(/^Blue Station A02 \u00b7 \d+ \/ 7 cards$/).waitFor();
   assert(await canFit());
   await page.setViewportSize({ width: 390, height: 844 });
   assert(await canFit());

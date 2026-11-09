@@ -19,6 +19,7 @@
     "dev:local-test": "npm run build -w @pandemic/web && npm run dev:local-test -w @pandemic/worker",
     "build": "npm run build -w @pandemic/web && npm run build -w @pandemic/worker",
     "check:docs": "python3 scripts/validate_build_kit.py && python3 scripts/test_validate_build_kit.py",
+    "check:install-scripts": "node scripts/install-scripts-policy.mjs",
     "test:smoke": "node scripts/smoke-foundation.mjs",
     "test:auth-smoke": "node scripts/test-auth-popup.mjs",
     "test:connected-smoke": "node scripts/test-connected-room.mjs",
@@ -41,5 +42,11 @@
     "typescript-eslint": "8.46.4",
     "vitest": "4.1.12"
   },
-  "packageManager": "npm@11.9.0"
+  "packageManager": "npm@11.19.1",
+  "allowScripts": {
+    "workerd": false,
+    "esbuild": false,
+    "protobufjs": false,
+    "@firebase/util": false
+  }
 }
