@@ -336,6 +336,7 @@ it('leaves no storage for requests to an unknown room and still creates it later
   ).toArray().map(({ name }) => name));
 
   await error(await request(path, owner), 404, 'ROOM_NOT_FOUND');
+  await error(await request(path + '/events', owner), 404, 'ROOM_NOT_FOUND');
   await error(await request(path + '/ws-ticket', owner, { method: 'POST', headers: { origin: 'http://127.0.0.1:8787' } }),
     404, 'ROOM_NOT_FOUND');
   await error(await request(path + '/commands', owner, json({ protocolVersion: 1, commandId: crypto.randomUUID(),
@@ -354,6 +355,48 @@ it('leaves no storage for requests to an unknown room and still creates it later
   expect((await request(path, owner)).status).toBe(200);
   expect(await tables()).toEqual(expect.arrayContaining(['metadata', 'room', 'members', 'commands', 'events']));
   expect(await runInDurableObject(stub, (_instance, ctx) => ctx.storage.getAlarm())).toEqual(expect.any(Number));
+});
+
+it('pages member-only public events with a cursor that can land inside a revision', async () => {
+  const roomId = crypto.randomUUID();
+  const path = `/api/rooms/${roomId}/events`;
+  expect((await create(roomId)).ok).toBe(true);
+  const stub = bindings.GAME_ROOMS.getByName(roomId);
+  const hidden = 'SECRET-MARKER';
+  // 99 single-event revisions, then four events in revision 100: the first page ends at (100, 0).
+  await runInDurableObject(stub, (_instance, ctx) => ctx.storage.transactionSync(() => {
+    const keys = [...Array.from({ length: 99 }, (_, index) => [index + 1, 0]), [100, 0], [100, 1], [100, 2], [100, 3]];
+    for (const [revision, eventIndex] of keys) {
+      ctx.storage.sql.exec('INSERT INTO events (revision, eventIndex, eventJson, timestamp) VALUES (?, ?, ?, ?)',
+        revision, eventIndex, JSON.stringify({ type: 'ACTION_PASSED', userId: owner, seed: hidden }), '2026-01-01T00:00:00.000Z');
+    }
+    ctx.storage.sql.exec('UPDATE room SET revision = 100');
+  }));
+
+  const first = await request(path, owner);
+  expect(first.status).toBe(200);
+  expect(first.headers.get('cache-control')).toBe('no-store');
+  const page = await first.json() as { revision: number; events: { revision: number; eventIndex: number; event: object }[];
+    next: { afterRevision: number; afterIndex: number } | null };
+  expect(page.revision).toBe(100);
+  expect(page.events).toHaveLength(100);
+  expect(page.events.at(-1)).toMatchObject({ revision: 100, eventIndex: 0 });
+  expect(page.events[0]!.event).toEqual({ type: 'ACTION_PASSED', userId: owner });
+  expect(JSON.stringify(page)).not.toContain(hidden);
+  expect(page.next).toEqual({ afterRevision: 100, afterIndex: 0 });
+
+  const rest = await (await request(`${path}?afterRevision=100&afterIndex=0`, owner)).json() as typeof page;
+  expect(rest.events.map(({ revision, eventIndex }) => [revision, eventIndex])).toEqual([[100, 1], [100, 2], [100, 3]]);
+  expect(rest.next).toBeNull();
+  expect(await (await request(`${path}?afterRevision=100&afterIndex=3`, owner)).json()).toMatchObject({ events: [], next: null });
+
+  await error(await request(path, other), 403, 'NOT_MEMBER');
+  await error(await request(path), 401, 'UNAUTHENTICATED');
+  await error(await request(`${path}?afterRevision=1`, owner), 400, 'BAD_REQUEST');
+  await error(await request(`${path}?afterRevision=-1&afterIndex=0`, owner), 400, 'BAD_REQUEST');
+  await runInDurableObject(stub, (_instance, ctx) => ctx.storage.sql.exec('UPDATE room SET expiresAt = ?',
+    new Date(Date.now() - 1000).toISOString()));
+  await error(await request(path, owner), 410, 'ROOM_EXPIRED');
 });
 
 it('serves SPA navigation and JSON API misses through the real local asset binding', async () => {
@@ -532,17 +575,18 @@ it('charges room reads and ticket requests to the edge IP budget but not command
   const send = (path: string, method: string) => normalWorker.fetch(new Request(local + path, { method,
     headers: { 'cf-connecting-ip': '203.0.113.9', authorization: 'Bearer never-log-token' },
   }) as Parameters<typeof normalWorker.fetch>[0], { ...bindings, EDGE_ROOM_IP: { limit: ip } });
-  for (const [path, method] of [[`/api/rooms/${roomId}`, 'GET'], [`/api/rooms/${roomId}/ws-ticket`, 'POST']]) {
+  for (const [path, method] of [[`/api/rooms/${roomId}`, 'GET'], [`/api/rooms/${roomId}/events`, 'GET'],
+    [`/api/rooms/${roomId}/ws-ticket`, 'POST']]) {
     const limited = await send(path!, method!);
     expect(limited.status).toBe(429);
     expect(limited.headers.get('retry-after')).toBe('60');
   }
-  expect(ip).toHaveBeenCalledTimes(2);
+  expect(ip).toHaveBeenCalledTimes(3);
   expect(ip).toHaveBeenCalledWith({ key: '203.0.113.9' });
   expect((await send(`/api/rooms/${roomId}/commands`, 'POST')).status).toBe(401);
   expect((await send(`/api/rooms/${roomId}/ws?ticket=${'a'.repeat(64)}`, 'GET')).status).toBe(401);
   expect((await send('/api/health', 'GET')).status).toBe(200);
-  expect(ip).toHaveBeenCalledTimes(2);
+  expect(ip).toHaveBeenCalledTimes(3);
 });
 
 it('fails closed if a public snapshot would exceed the wire budget', async () => {

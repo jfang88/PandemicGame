@@ -87,6 +87,30 @@ function publicEvent(event: RoomEventData): RoomEventData {
   }
 }
 
+function publicRoomEvent({ revision, eventIndex, timestamp, event }: RoomEvent): RoomEvent {
+  return { revision, eventIndex, timestamp, event: publicEvent(event) };
+}
+
+export const EVENT_PAGE_SIZE = 100;
+
+/**
+ * Only call after membership authorization. Pass the events after the cursor, oldest first, reading one more
+ * than a page so the result can say whether another page follows.
+ */
+export function projectEventPage(roomId: string, revision: number, events: readonly RoomEvent[]) {
+  const page = events.slice(0, EVENT_PAGE_SIZE);
+  const last = page.at(-1);
+  return {
+    protocolVersion: PROTOCOL_VERSION,
+    roomId,
+    revision,
+    events: page.map(publicRoomEvent),
+    next: events.length > EVENT_PAGE_SIZE && last ? { afterRevision: last.revision, afterIndex: last.eventIndex } : null,
+  };
+}
+
+export type PublicEventPage = ReturnType<typeof projectEventPage>;
+
 /** Only call after membership authorization. Keep internal objects out of the wire shape. */
 export function projectRoom(source: RoomProjectionSource) {
   const game = source.game;
@@ -101,8 +125,7 @@ export function projectRoom(source: RoomProjectionSource) {
     ownerUserId: source.ownerUserId,
     members: source.members.map(({ userId, seat, displayName, role, ready }) =>
       ({ userId, seat, displayName: sanitizeDisplayName(displayName), role, ready })),
-    recentEvents: source.recentEvents.slice(-30).map(({ revision, eventIndex, timestamp, event }) =>
-      ({ revision, eventIndex, timestamp, event: publicEvent(event) })),
+    recentEvents: source.recentEvents.slice(-30).map(publicRoomEvent),
     game: game && {
       phase: game.phase,
       players: game.players.map(({ userId, seat, locationId, hand }) =>

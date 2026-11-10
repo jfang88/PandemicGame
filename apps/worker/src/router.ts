@@ -1,4 +1,4 @@
-import { apiError, isUuid, MAX_JSON_BYTES, parseCommandEnvelope, parseCreateRoom, parseJoinRoom, parseRotateInvite,
+import { apiError, isUuid, MAX_JSON_BYTES, parseCommandEnvelope, parseCreateRoom, parseEventCursor, parseJoinRoom, parseRotateInvite,
   PROTOCOL_VERSION, type ErrorCode } from '@pandemic/protocol';
 import { sha256 } from './command-hash';
 import type { CreateBudget, RateFailure } from './limits';
@@ -68,10 +68,10 @@ function rejectResult(result: { code: ErrorCode; currentVersion?: number; retryA
   return reject(result.code, undefined, result.currentVersion, result.retryAfter);
 }
 
-/** Create, join, room reads and ticket requests share one approximate per-IP budget. Commands use the room limiter. */
+/** Create, join, room and event reads, and ticket requests share one approximate per-IP budget. Commands use the room limiter. */
 function edgeLimited(request: Request): boolean {
   const path = new URL(request.url).pathname;
-  if (request.method === 'GET') return /^\/api\/rooms\/[^/]+$/.test(path);
+  if (request.method === 'GET') return /^\/api\/rooms\/[^/]+(?:\/events)?$/.test(path);
   return request.method === 'POST' && (path === '/api/rooms' || /^\/api\/rooms\/[^/]+\/(?:join|ws-ticket)$/.test(path));
 }
 
@@ -133,7 +133,7 @@ async function emptyBody(request: Request): Promise<boolean> {
 
 export async function route(request: Request, env: Env,
   identity: RequestIdentity | { readonly code: 'UNAUTHENTICATED' | 'TOKEN_EXPIRED' } | null = null): Promise<Response> {
-  const { pathname } = new URL(request.url);
+  const { pathname, searchParams } = new URL(request.url);
   if (pathname === '/api/health' && request.method === 'GET') {
     return json({ ok: true, buildSha: env.BUILD_SHA ?? 'local', protocolVersion: PROTOCOL_VERSION });
   }
@@ -141,7 +141,7 @@ export async function route(request: Request, env: Env,
     return env.ASSETS ? env.ASSETS.fetch(request) : reject('ROOM_NOT_FOUND', 'Route not found.');
   }
   const create = pathname === '/api/rooms' && request.method === 'POST';
-  const roomMatch = request.method === 'GET' ? /^\/api\/rooms\/([^/]+)$/.exec(pathname) : null;
+  const roomMatch = request.method === 'GET' ? /^\/api\/rooms\/([^/]+)(\/events)?$/.exec(pathname) : null;
   const mutation = request.method === 'POST' ? /^\/api\/rooms\/([^/]+)\/(commands|invite|join|ws-ticket)$/.exec(pathname) : null;
   const socket = request.method === 'GET' ? /^\/api\/rooms\/([^/]+)\/ws$/.exec(pathname) : null;
   if (!create && !roomMatch && !mutation && !socket) return reject('ROOM_NOT_FOUND', 'Route not found.');
@@ -193,6 +193,12 @@ export async function route(request: Request, env: Env,
       if (!body.ok) return reject(body.code);
       const result = await stub.execute(userId, body.value);
       return 'code' in result ? rejectResult(result) : json(result);
+    }
+    if (roomMatch?.[2]) {
+      const cursor = parseEventCursor(searchParams);
+      if (!cursor.ok) return reject(cursor.code);
+      const result = await stub.eventPage(userId, cursor.value);
+      return 'code' in result ? rejectResult(result) : json(result.page);
     }
     const result = await stub.read(userId);
     return 'code' in result ? rejectResult(result) : json(result.snapshot);

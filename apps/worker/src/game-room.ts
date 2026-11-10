@@ -1,6 +1,7 @@
 import { applyCommand, assertGameInvariants, BOARD_VERSION, RULES_VERSION, type GameState } from '@pandemic/engine';
-import { projectRoom, PROTOCOL_VERSION, sanitizeDisplayName, type CommandAcceptance, type CommandEnvelope, type CommandReceipt,
-  type ErrorCode, type InviteAcceptance, type PublicRoomSnapshot, type RoomEventData, type RoomMember } from '@pandemic/protocol';
+import { EVENT_PAGE_SIZE, projectEventPage, projectRoom, PROTOCOL_VERSION, sanitizeDisplayName, type CommandAcceptance,
+  type CommandEnvelope, type CommandReceipt, type ErrorCode, type EventCursor, type InviteAcceptance, type PublicEventPage,
+  type PublicRoomSnapshot, type RoomEvent, type RoomEventData, type RoomMember } from '@pandemic/protocol';
 import { commandHash, requestHash, sha256 } from './command-hash';
 import { applyLobbyCommand, gameSeed, isLobbyCommand } from './lobby';
 import { chargeRoom } from './limits';
@@ -25,8 +26,9 @@ type RoomRow = {
   gameJson: string | null;
 };
 
-type ReadResult = { readonly snapshot: PublicRoomSnapshot }
-  | { readonly code: 'ROOM_NOT_FOUND' | 'ROOM_EXPIRED' | 'NOT_MEMBER' | 'ROOM_INCOMPATIBLE' | 'INTERNAL_ERROR' };
+type ReadFailure = { readonly code: 'ROOM_NOT_FOUND' | 'ROOM_EXPIRED' | 'NOT_MEMBER' | 'ROOM_INCOMPATIBLE' | 'INTERNAL_ERROR' };
+type ReadResult = { readonly snapshot: PublicRoomSnapshot } | ReadFailure;
+type EventPageResult = { readonly page: PublicEventPage } | ReadFailure;
 type CreateResult = { readonly roomId: string; readonly version: number }
   | { readonly code: 'ROOM_CONFLICT' | 'ROOM_EXPIRED' | 'ROOM_INCOMPATIBLE' };
 export type ReceiptKind = 'command' | 'leave' | 'invite' | 'join';
@@ -251,6 +253,27 @@ export class GameRoom extends RealtimeRoom {
       if (game && !this.supports(game)) return { code: 'ROOM_INCOMPATIBLE' };
       if (this.expired(room)) return { code: 'ROOM_EXPIRED' };
       return { snapshot: this.snapshot(room, game) };
+    } catch {
+      return { code: 'INTERNAL_ERROR' };
+    }
+  }
+
+  /** Membership-only public events after the cursor, oldest first, at most one page. */
+  eventPage(userId: string, cursor: EventCursor): EventPageResult {
+    if (!this.compatible) return { code: this.mayReportIncompatibility(userId) ? 'ROOM_INCOMPATIBLE' : 'NOT_MEMBER' };
+    const room = this.room();
+    if (!room) return { code: this.missingRoom() };
+    if (!this.hasMember(userId)) return { code: 'NOT_MEMBER' };
+    if (!this.supports(room)) return { code: 'ROOM_INCOMPATIBLE' };
+    try {
+      const game = this.loadGame(room);
+      if (game && !this.supports(game)) return { code: 'ROOM_INCOMPATIBLE' };
+      if (this.expired(room)) return { code: 'ROOM_EXPIRED' };
+      const events = this.ctx.storage.sql.exec<EventRow>(`SELECT revision, eventIndex, timestamp, eventJson FROM events
+        WHERE (revision, eventIndex) > (?, ?) ORDER BY revision, eventIndex LIMIT ?`,
+      cursor.afterRevision, cursor.afterIndex, EVENT_PAGE_SIZE + 1).toArray()
+        .map(({ eventJson, ...metadata }): RoomEvent => ({ ...metadata, event: JSON.parse(eventJson) as RoomEventData }));
+      return { page: projectEventPage(room.roomId, room.revision, events) };
     } catch {
       return { code: 'INTERNAL_ERROR' };
     }
