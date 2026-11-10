@@ -1,6 +1,6 @@
 import { BOARD_VERSION, createGame, RULES_VERSION } from '@pandemic/engine';
 import { expect, it } from 'vitest';
-import { projectRoom, type RoomEvent } from './index';
+import { EVENT_PAGE_SIZE, projectEventPage, projectRoom, type RoomEvent } from './index';
 
 it('allowlists nested projection fields and bounds recent events', () => {
   const roster = [{ userId: 'Owner', seat: 0, role: 'medic' }, { userId: 'Guest', seat: 3, role: 'scientist' }] as const;
@@ -35,4 +35,24 @@ it('allowlists nested projection fields and bounds recent events', () => {
   expect(snapshot.recentEvents).toHaveLength(30);
   expect(snapshot.recentEvents[0]?.eventIndex).toBe(5);
   expect(new TextEncoder().encode(encoded).length).toBeLessThan(64 * 1024);
+});
+
+it('pages public events with a cursor and strips stored fields outside the allowlist', () => {
+  const hidden = 'SECRET-MARKER';
+  const stored = (revision: number, eventIndex: number): RoomEvent => ({
+    revision, eventIndex, timestamp: '2026-01-01T00:00:00.000Z',
+    event: { type: 'ACTION_PASSED', userId: 'Owner', seed: hidden } as unknown as RoomEvent['event'],
+  });
+  const full = projectEventPage('room', 120, Array.from({ length: EVENT_PAGE_SIZE + 1 }, (_, index) => stored(index + 1, 0)));
+  expect(full.events).toHaveLength(EVENT_PAGE_SIZE);
+  expect(full.next).toEqual({ afterRevision: EVENT_PAGE_SIZE, afterIndex: 0 });
+  expect(full).toMatchObject({ protocolVersion: 1, roomId: 'room', revision: 120 });
+  expect(full.events[0]).toEqual({ revision: 1, eventIndex: 0, timestamp: '2026-01-01T00:00:00.000Z',
+    event: { type: 'ACTION_PASSED', userId: 'Owner' } });
+  expect(JSON.stringify(full)).not.toContain(hidden);
+
+  const last = projectEventPage('room', 120, [stored(120, 0), stored(120, 1)]);
+  expect(last.events.map(({ eventIndex }) => eventIndex)).toEqual([0, 1]);
+  expect(last.next).toBeNull();
+  expect(projectEventPage('room', 120, [])).toMatchObject({ events: [], next: null });
 });

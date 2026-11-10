@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { apiError, isUserId, parseCommandEnvelope, parseCreateRoom, parseJoinRoom, parseRotateInvite } from './index';
+import { apiError, isUserId, parseCommandEnvelope, parseCreateRoom, parseEventCursor, parseJoinRoom,
+  parseRotateInvite } from './index';
 
 const commandId = 'e58b581e-3631-420f-9ea6-4fd9fb6545cf';
 const envelope = { protocolVersion: 1, commandId, expectedVersion: 0 };
@@ -59,5 +60,25 @@ describe('strict v1 command schemas', () => {
       status: 409, body: { error: { code: 'STALE_VERSION', message: 'Refresh.', retryable: false }, currentVersion: 0 },
     });
     expect(apiError('UNAUTHENTICATED', 'Sign in.').body).not.toHaveProperty('currentVersion');
+  });
+});
+
+describe('event history cursor', () => {
+  const parse = (query: string) => parseEventCursor(new URLSearchParams(query));
+
+  it('starts before the first event without parameters and accepts an exact cursor', () => {
+    expect(parse('')).toEqual({ ok: true, value: { afterRevision: 0, afterIndex: 0 } });
+    expect(parse('afterRevision=42&afterIndex=3')).toEqual({ ok: true, value: { afterRevision: 42, afterIndex: 3 } });
+    expect(parse('afterIndex=0&afterRevision=9007199254740991'))
+      .toEqual({ ok: true, value: { afterRevision: 9007199254740991, afterIndex: 0 } });
+  });
+
+  it.each([
+    'afterRevision=1', 'afterIndex=1', 'afterRevision=1&afterIndex=1&limit=5', 'afterRevision=1&afterRevision=2',
+    'afterRevision=1&afterIndex=1&afterIndex=2', 'afterRevision=-1&afterIndex=0', 'afterRevision=01&afterIndex=0',
+    'afterRevision=1.5&afterIndex=0', 'afterRevision=&afterIndex=0', 'afterRevision=%201&afterIndex=0',
+    'afterRevision=1e3&afterIndex=0', 'afterRevision=9007199254740992&afterIndex=0', 'cursor=abc',
+  ])('rejects %s', query => {
+    expect(parse(query)).toEqual({ ok: false, code: 'BAD_REQUEST' });
   });
 });

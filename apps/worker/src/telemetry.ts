@@ -6,7 +6,7 @@ function operation(request: Request): string | null {
   if (path === '/api/rooms' && request.method === 'POST') return 'create';
   // Ticket-bearing upgrade URLs are outside application telemetry.
   if (!path.startsWith('/api/rooms/') || path.endsWith('/ws')) return null;
-  return /^\/api\/rooms\/[^/]+(?:\/(join|commands|invite|ws-ticket))?$/.exec(path)?.[1] ?? 'room';
+  return /^\/api\/rooms\/[^/]+(?:\/(join|commands|invite|ws-ticket|events))?$/.exec(path)?.[1] ?? 'room';
 }
 
 export async function observeRequest(request: Request, env: Env, work: () => Promise<Response>): Promise<Response> {

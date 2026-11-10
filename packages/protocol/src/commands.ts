@@ -122,3 +122,19 @@ export function parseJoinRoom(input: unknown): ParseResult<{ readonly commandId:
     || typeof input.inviteSecret !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(input.inviteSecret)) return badRequest;
   return { ok: true, value: { commandId: input.commandId.toLowerCase(), inviteSecret: input.inviteSecret } };
 }
+
+export interface EventCursor {
+  readonly afterRevision: number;
+  readonly afterIndex: number;
+}
+
+/** Reads `?afterRevision=N&afterIndex=M`. Both or neither; no other parameters. Neither starts at the first event. */
+export function parseEventCursor(params: URLSearchParams): ParseResult<EventCursor> {
+  const keys = [...params.keys()];
+  if (keys.length === 0) return { ok: true, value: { afterRevision: 0, afterIndex: 0 } };
+  if (keys.length !== 2 || !params.has('afterRevision') || !params.has('afterIndex')) return badRequest;
+  const [afterRevision, afterIndex] = [params.get('afterRevision')!, params.get('afterIndex')!].map(value =>
+    /^(?:0|[1-9][0-9]{0,15})$/.test(value) ? Number(value) : Number.NaN);
+  if (!isVersion(afterRevision) || !isVersion(afterIndex)) return badRequest;
+  return { ok: true, value: { afterRevision, afterIndex } };
+}

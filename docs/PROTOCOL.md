@@ -14,7 +14,7 @@ All non-health API endpoints require `Authorization: Bearer <Firebase ID token>`
 | POST /api/rooms/:id/commands | Command envelope | Accepted receipt/current snapshot or structured error |
 | POST /api/rooms/:id/ws-ticket | None | Membership-only `{ticket,expiresAt}`; no-store; 60-second one-use ticket |
 | GET /api/rooms/:id/ws?ticket=... | WebSocket upgrade | Origin-bound consume, current snapshot, then pushes |
-| GET /api/rooms/:id/events?afterRevision=N&afterIndex=M | Cursor | Not implemented in the current release. Snapshots carry the latest 30 events. A paging route needs a protocol change. Membership-only public events, max 100 and next cursor |
+| GET /api/rooms/:id/events?afterRevision=N&afterIndex=M | Cursor: both parameters or neither; no others | Membership-only public events after the cursor, oldest first, max 100: `{protocolVersion,roomId,revision,events,next}`. Without a cursor it starts at the first event. `next` is the cursor for the following page, or null at the end. Events use the snapshot projection. |
 
 Invite URLs use `/join/:roomId#invite=<secret>`, keeping invite secrets out of request paths/server access logs. Client reads fragment, posts join after login, and clears the fragment after use; preserve it temporarily in sessionStorage while the Firebase popup completes or login is retried, then clear it. Do not put invite secrets into provider OAuth URLs. Room members cannot retrieve the current invite; owner rotates to obtain a new one. Duplicate rotate command must return the same invite via its private receipt, stored server-side as sensitive data and excluded from all public exports/logs. This is an explicit exception to receipts being public-result-only; protect it like a credential and erase it at expiry.
 
