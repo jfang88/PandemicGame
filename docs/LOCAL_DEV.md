@@ -52,4 +52,7 @@ The current entries deny the `workerd`, `esbuild`, `protobufjs` and `@firebase/u
 project does not need. If a new dependency brings an install script, read it, then record a decision with
 `npm install-scripts approve <pkg>` or `npm install-scripts deny <pkg>`. `npm run check:install-scripts`
 fails in CI until every install script has a decision.
+`package.json` `overrides` pin patched releases of two transitive packages: `@grpc/grpc-js`, under Firebase's
+unused Firestore module, and `minimatch`, under `typescript-eslint`. Remove an override once its parent package
+depends on a patched release, then regenerate the lockfile and confirm `npm audit` stays clean.
 The browser smoke check in [T01 evidence](evidence/T01.md) covers the foundation screen and Worker connectivity.
