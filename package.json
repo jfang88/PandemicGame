@@ -42,6 +42,12 @@
     "typescript-eslint": "8.46.4",
     "vitest": "4.1.12"
   },
+  "overrides": {
+    "@grpc/grpc-js": "1.14.7",
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "11.0.3"
+    }
+  },
   "packageManager": "npm@11.19.1",
   "allowScripts": {
     "workerd": false,
