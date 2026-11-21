@@ -1,6 +1,12 @@
-# Set up Firebase and Cloudflare for PandemicGame
+# Set up Firebase, Cloudflare, and GitHub Free for PandemicGame
 
-Start with preview. You can create the accounts, Firebase project, and identity-provider registrations now. The first real Cloudflare deployment and provider checks use the reviewed **Deploy Cloudflare** workflow on protected `main`. Set up production separately before the owner-controlled release.
+Start with **preview**. Every service below has a **$0 free tier** that works for this game:
+
+- **GitHub Free (public repository):** Unlimited GitHub Actions minutes on standard Linux runners, repository rulesets on `main`, and GitHub Environments with environment secrets, environment variables, and `main`-only branch restrictions. *(If the repository were ever made private on GitHub Free, GitHub Environments are restricted and Actions minutes are capped; see [Owner-controlled local deployment](CLOUDFLARE.md#owner-controlled-local-deployment) for the fallback.)*
+- **Cloudflare Workers Free:** Hosts the static React app, Worker API, and SQLite-backed Durable Objects (`GameRoom` and `CreateBudget`).
+- **Firebase Authentication Spark:** Provides Google and Microsoft (personal Hotmail/Outlook) login with no billing account required.
+
+Set up **preview** first and verify it end-to-end. Set up **production** separately with its own Firebase project, Microsoft app registration, and Cloudflare token before the owner-controlled release.
 
 | Resource | Preview example | Production example |
 | --- | --- | --- |
@@ -9,51 +15,121 @@ Start with preview. You can create the accounts, Firebase project, and identity-
 | Cloudflare Worker name | `pandemicgame-preview` | `pandemicgame-production` |
 | GitHub deployment environment | `preview` | `production` |
 
-Project IDs and hostnames in this guide are examples. Save your actual non-secret IDs as you go. Keep the Microsoft client secret in Firebase Authentication and the Cloudflare deployment token in the appropriate GitHub environment secret. [Repository credential boundaries](AGENT_ACCESS.md)
+Project IDs and hostnames below are examples. Save your actual non-secret IDs as you go. Keep the Microsoft client secret **only** in Firebase Authentication and the Cloudflare API token **only** in the matching GitHub Environment secret—never in git, issues, or chat. [Repository credential boundaries](AGENT_ACCESS.md)
 
-## 1. Set up the Cloudflare account and choose the preview hostname
+## 1. Set up Cloudflare (Workers Free) and create a preview API token
 
-1. Create or sign in to an owner-controlled Cloudflare account. Verify the email address and enable MFA. From the account overview, copy its **Account ID**. You will use it as `CLOUDFLARE_ACCOUNT_ID`. [Cloudflare sign-up](https://dash.cloudflare.com/sign-up) · [Find the account ID](https://developers.cloudflare.com/fundamentals/account/find-account-and-zone-ids/)
-2. Open **Workers & Pages** under the intended account. Use **Workers Free** for the initial setup. The application runs as a Worker with static assets and SQLite-backed Durable Objects. Workers Free supports this SQLite backend. [Workers dashboard setup](https://developers.cloudflare.com/workers/get-started/dashboard/) · [Durable Objects plans and limits](https://developers.cloudflare.com/durable-objects/platform/pricing/)
-3. Choose or record the account's `workers.dev` subdomain if the dashboard offers it. Plan on a URL such as `https://pandemicgame-preview.<account-subdomain>.workers.dev`. Confirm the account subdomain before deployment so you can set the exact Worker origin in GitHub. After the first deployment, compare the URL in the Worker dashboard with the value you configured. Use a stable preview hostname so invite links and Firebase authorization keep working across builds. [Cloudflare workers.dev routes](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)
-4. Leave Worker and Durable Object binding creation to the first reviewed deployment. Wrangler registers the `GameRoom` SQLite class in migration `v1` and the `CreateBudget` SQLite class in `v2`. Cloudflare creates an individual room's storage when the app uses it. Preview and production get separate Workers and Durable Object namespaces. [Repository Wrangler configuration](../wrangler.jsonc) · [Durable Object class migrations](https://developers.cloudflare.com/durable-objects/reference/durable-objects-migrations/)
+1. Create or sign in to an owner-controlled Cloudflare account, verify your email, and turn on MFA. [Cloudflare sign-up](https://dash.cloudflare.com/sign-up)
+2. Open **Workers & Pages** and stay on **Workers Free** (do not enable a paid plan). From the right sidebar or **Account Home**, copy your **Account ID**—this is `CLOUDFLARE_ACCOUNT_ID` (non-secret identifier). [Find the account ID](https://developers.cloudflare.com/fundamentals/account/find-account-and-zone-ids/) · [Durable Objects plans and limits](https://developers.cloudflare.com/durable-objects/platform/pricing/)
+3. Note or set up your account's `workers.dev` subdomain (shown under **Workers & Pages → Overview**). Your preview URL will be:
 
-## 2. Create the Firebase project and enable Google
+   ```text
+   https://pandemicgame-preview.<account-subdomain>.workers.dev
+   ```
 
-1. Open **Firebase Console → Create a project**. Choose a globally unique preview project ID and keep the project on **Spark**. Google Analytics is optional. This project uses Firebase Authentication for identity. Room and game data live in Cloudflare. [Firebase Console](https://console.firebase.google.com/) · [Firebase plans](https://firebase.google.com/docs/projects/billing/firebase-pricing-plans)
-2. In **Project overview**, choose the Web icon `</>` or **Add app → Web**. Give it a nickname such as **PandemicGame Preview Web**, then register the app. Copy `apiKey`, `authDomain`, `projectId`, and `appId` from the SDK configuration. These are public browser configuration. Keep Firebase's `authDomain`, usually `<project-id>.firebaseapp.com`. [Register a Firebase Web app](https://firebase.google.com/docs/web/setup)
-3. Open **Authentication → Get started → Sign-in method**. Select **Google**, enable it, choose the required project support email, and save. If your Google consent configuration limits access to test users, add the intended preview testers there. [Enable Google sign-in](https://firebase.google.com/docs/auth/web/google-signin)
-4. Open **Authentication → Settings → Authorized domains → Add domain**. Add the exact Cloudflare hostname for this Firebase project, with no scheme, port, or path. For preview-only local OAuth testing, also add `localhost` explicitly. New Firebase projects may start without it. Use only the production hostname in the production project's authorized domains for this app. [Firebase authorized domains](https://firebase.google.com/docs/auth/faq-and-troubleshooting#limit_your_authorized_authentication_domains)
+   Record the exact origin (with `https://` and **no** trailing slash) for `APP_ORIGINS`, and the bare hostname (`pandemicgame-preview.<account-subdomain>.workers.dev`) for Firebase Authorized Domains. [Cloudflare workers.dev routes](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)
+4. Leave Worker and Durable Object creation to the first reviewed deployment. Wrangler registers `GameRoom` (`v1`) and `CreateBudget` (`v2`) automatically from [wrangler.jsonc](../wrangler.jsonc).
+5. Create a scoped Cloudflare API token for preview deployments:
+   - Open **Manage Account → Account API Tokens** (or **My Profile → API Tokens**) → **Create Token**.
+   - Use **Edit Cloudflare Workers** (or a custom token with **Workers Scripts: Edit** scoped to your single account). First-time Worker creation needs permission to create the Worker; after `pandemicgame-preview` exists, you can narrow or rotate to a Worker-scoped Editor token.
+   - Remove unneeded permissions (no Billing, DNS, Zone Routes, R2, KV, or D1).
+   - Set an expiration date, click **Create Token**, and copy the token value once into a password manager. This will go **only** into the GitHub `preview` Environment secret `CLOUDFLARE_API_TOKEN`. [Cloudflare API tokens](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/) · [Cloudflare Worker roles](https://developers.cloudflare.com/workers/authorization/workers/#wrangler)
+
+## 2. Create the Firebase Spark project and enable Google sign-in
+
+1. Open [Firebase Console](https://console.firebase.google.com/) → **Create a project**. Choose a globally unique preview project ID (for example `pandemic-preview-1234`) and keep the project on the **Spark** (free) plan. Google Analytics is optional. Do not enable Firestore, Realtime Database, Functions, Hosting, Phone Auth, or Blaze billing. [Firebase plans](https://firebase.google.com/docs/projects/billing/firebase-pricing-plans)
+2. In **Project overview**, click the Web icon `</>` (**Add app → Web**), give it a nickname such as **PandemicGame Preview Web**, and register it. Copy these four **public** browser config values from the SDK snippet:
+   - `apiKey` → `VITE_FIREBASE_API_KEY`
+   - `authDomain` → `VITE_FIREBASE_AUTH_DOMAIN` (usually `<project-id>.firebaseapp.com`)
+   - `projectId` → `VITE_FIREBASE_PROJECT_ID` (and also `FIREBASE_PROJECT_ID` and `PANDEMIC_PREVIEW_FIREBASE_PROJECT_ID`)
+   - `appId` → `VITE_FIREBASE_APP_ID`
+   [Register a Firebase Web app](https://firebase.google.com/docs/web/setup)
+3. Open **Authentication → Get started → Sign-in method** → **Google**. Enable it, choose a project support email, and click **Save**. [Enable Google sign-in](https://firebase.google.com/docs/auth/web/google-signin)
+4. Open **Authentication → Settings → Authorized domains → Add domain**:
+   - Add the bare preview hostname: `pandemicgame-preview.<account-subdomain>.workers.dev` (no `https://`, port, or trailing slash).
+   - For optional local OAuth testing, also ensure `localhost` is listed.
+   - When you later create the production Firebase project, add only the production hostname there. [Firebase authorized domains](https://firebase.google.com/docs/auth/faq-and-troubleshooting#limit_your_authorized_authentication_domains)
 
 ## 3. Enable Microsoft sign-in for personal Hotmail and Outlook accounts
 
-1. In the Firebase project's **Authentication → Sign-in method**, open **Microsoft**. Find the OAuth callback URL shown in the provider panel. With the default Firebase auth domain, it has this shape:
+1. In Firebase **Authentication → Sign-in method**, open **Microsoft** and copy the exact OAuth callback URL shown (normally `https://<actual-preview-project-id>.firebaseapp.com/__/auth/handler`). [Firebase Microsoft provider setup](https://firebase.google.com/docs/auth/web/microsoft-oauth)
+2. Open the **Microsoft Entra admin center** → **App registrations → New registration**:
+   - Name: `PandemicGame Preview`
+   - Supported account types: **Accounts in any organizational directory and personal Microsoft accounts** (required so personal Hotmail/Outlook accounts can sign in).
+   - Redirect URI: select platform **Web** and paste the exact Firebase callback URL from step 1. Click **Register**. [Register an Entra app](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app) · [Microsoft redirect URI rules](https://learn.microsoft.com/en-us/entra/identity-platform/reply-url)
+3. On the app's **Overview** page, copy the **Application (client) ID**.
+4. Open **Certificates & secrets → Client secrets → New client secret**, set an expiry, click **Add**, and immediately copy the secret **Value** (not the Secret ID). Record the expiry date in a reminder so you can rotate it before it expires. [Manage Entra credentials](https://learn.microsoft.com/en-us/entra/identity-platform/how-to-add-credentials)
+5. Return to Firebase **Authentication → Sign-in method → Microsoft**, paste the **Application (client) ID** and client secret **Value**, enable the provider, and click **Save**. Do not store the Microsoft client secret in GitHub or the repository.
 
-   ```text
-   https://<actual-preview-project-id>.firebaseapp.com/__/auth/handler
+## 4. Safe placement reference (what goes where)
+
+Never commit `.env.local`, `.dev.vars`, API tokens, or OAuth client secrets to git, and never paste secrets into chat or GitHub issues.
+
+| Name | Secret or Public? | Value | Where to put it |
+| --- | --- | --- | --- |
+| `PANDEMIC_PREVIEW_FIREBASE_PROJECT_ID` | Public | Preview Firebase `projectId` | GitHub **Repository Variable** (prevents preview/production sharing one Firebase project) |
+| `VITE_FIREBASE_API_KEY` | Public | Preview Web app `apiKey` | GitHub `preview` **Environment Variable** |
+| `VITE_FIREBASE_AUTH_DOMAIN` | Public | Preview Web app `authDomain` | GitHub `preview` **Environment Variable** |
+| `VITE_FIREBASE_PROJECT_ID` | Public | Preview Web app `projectId` | GitHub `preview` **Environment Variable** |
+| `VITE_FIREBASE_APP_ID` | Public | Preview Web app `appId` | GitHub `preview` **Environment Variable** |
+| `FIREBASE_PROJECT_ID` | Public | Same preview `projectId` (for Worker JWT checks) | GitHub `preview` **Environment Variable** |
+| `APP_ORIGINS` | Public | Exact origin `https://pandemicgame-preview.<account-subdomain>.workers.dev` (no trailing slash) | GitHub `preview` **Environment Variable** |
+| `CLOUDFLARE_ACCOUNT_ID` | Public | Cloudflare Account ID | GitHub `preview` **Environment Variable** |
+| `CLOUDFLARE_API_TOKEN` | **Secret** | Scoped preview Cloudflare API token | GitHub `preview` **Environment Secret** (leave unset at repo/org level) |
+| Microsoft client secret **Value** | **Secret** | From Entra app registration | **Firebase Console only** (Microsoft provider settings) |
+
+A mismatch between `VITE_FIREBASE_PROJECT_ID` and `FIREBASE_PROJECT_ID` causes login popups to succeed while `/api/rooms` returns `401`. [Public Web config template](../config/firebase.env.example) · [Repository protocol](PROTOCOL.md)
+
+## 5. Put the details into GitHub Free safely (click-by-click)
+
+1. **Verify `main` is protected:**
+   - Open `jfang88/PandemicGame` → **Settings → Rules → Rulesets** (or **Settings → Branches**).
+   - Confirm `main` is protected (the `basic` ruleset requires pull requests and the `verify` CI check). The [Deploy Cloudflare](../.github/workflows/deploy-cloudflare.yml) workflow refuses to run if `main` is not protected.
+2. **Add the Repository Variable (project-isolation registry):**
+   - Open **Settings → Secrets and variables → Actions → Variables** tab → **New repository variable**.
+   - Name: `PANDEMIC_PREVIEW_FIREBASE_PROJECT_ID`
+   - Value: your preview Firebase `projectId`
+   - Click **Add variable**. *(Add `PANDEMIC_PRODUCTION_FIREBASE_PROJECT_ID` here later with a different Firebase project before production.)*
+3. **Create the `preview` Deployment Environment:**
+   - Open **Settings → Environments → New environment**.
+   - Name it `preview` and click **Configure environment**.
+   - Under **Deployment branches and tags**, select **Selected branches and tags** → **Add deployment branch or tag rule** → enter `main` → **Add rule**. This ensures untrusted PR branches can never access the preview token.
+   - Optionally enable **Required reviewers** and add yourself so GitHub pauses for your approval before deploying.
+4. **Add the 7 Environment Variables** inside `preview`:
+   - Scroll to **Environment variables** → **Add environment variable** for each of:
+     `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`, `FIREBASE_PROJECT_ID`, `APP_ORIGINS`, `CLOUDFLARE_ACCOUNT_ID`.
+5. **Add the 1 Environment Secret** inside `preview`:
+   - Scroll to **Environment secrets** → **Add environment secret**.
+   - Name: `CLOUDFLARE_API_TOKEN`
+   - Value: paste your preview Cloudflare API token → **Add secret**.
+   - Confirm `CLOUDFLARE_API_TOKEN` is **not** set under repository-level **Secrets and variables → Actions → Secrets**.
+   [GitHub deployment environments](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)
+
+## 6. How to push code and deploy to Cloudflare using GitHub Free
+
+Because `main` is protected and deployments are intentionally manual, every change follows this free, zero-secret-on-PR workflow:
+
+1. **Push your changes on a branch and open a Pull Request:**
+
+   ```sh
+   git checkout -b my-change
+   git add -A
+   git commit -m "Describe your change"
+   git push -u origin my-change
    ```
 
-   Use the exact URL Firebase shows. This is the Firebase OAuth handler. The Cloudflare hostname belongs in Firebase's authorized domains. [Firebase Microsoft provider setup](https://firebase.google.com/docs/auth/web/microsoft-oauth)
-2. In the **Microsoft Entra admin center**, select the tenant where you have permission to register applications. Open **App registrations → New registration**. Give it an environment-specific name. For supported account types, choose the option that includes both organizational directories and **personal Microsoft accounts**. Select **Web** for the redirect URI and paste the Firebase callback. If you already registered the app, add the Web redirect under **Authentication**. [Register an Entra app](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app) · [Microsoft redirect URI rules](https://learn.microsoft.com/en-us/entra/identity-platform/reply-url)
-3. From the registration's **Overview**, copy the **Application (client) ID**. In **Certificates & secrets → Client secrets → New client secret**, give the credential an expiry and add it. Copy the **Value** shown immediately after creation. Track the expiry in your password manager or reminders. [Manage Entra credentials](https://learn.microsoft.com/en-us/entra/identity-platform/how-to-add-credentials)
-4. Back in Firebase's Microsoft provider panel, enter the Application (client) ID and the client secret Value, enable the provider, and save. Repeat with a separate app registration and callback when setting up production. The application uses the Firebase SDK's Microsoft popup without requesting mail or contact scopes. [Firebase Microsoft sign-in](https://firebase.google.com/docs/auth/web/microsoft-oauth)
-5. Before the secret expires, create a replacement in the same Entra app, update Firebase, and verify the popup with a personal Microsoft account. Retire the previous secret after the replacement works. If you cannot create the registration, ask the Entra tenant admin for permission to register applications in that tenant. [Entra app registration prerequisites](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app)
-
-## 4. Put each value in the right place
-
-| Name | Value | Where it goes |
-| --- | --- | --- |
-| `VITE_FIREBASE_API_KEY` | Firebase Web app `apiKey` | GitHub environment variable used by the web build |
-| `VITE_FIREBASE_AUTH_DOMAIN` | Firebase Web app `authDomain` | GitHub environment variable used by the web build |
-| `VITE_FIREBASE_PROJECT_ID` | Firebase Web app `projectId` | GitHub environment variable used by the web build |
-| `VITE_FIREBASE_APP_ID` | Firebase Web app `appId` | GitHub environment variable used by the web build |
-| `FIREBASE_PROJECT_ID` | Same project ID as the corresponding Web build | GitHub environment variable passed to Wrangler |
-| `APP_ORIGINS` | Exact game origin, such as `https://pandemicgame-preview.<account-subdomain>.workers.dev`, without a trailing slash | GitHub environment variable passed to Wrangler for socket tickets and upgrades |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID | GitHub environment variable for deployment |
-| `CLOUDFLARE_API_TOKEN` | Environment-specific Cloudflare deployment token | GitHub deployment environment secret |
-| Microsoft client secret **Value** | From the corresponding Entra registration | Firebase Microsoft provider settings |
-
-The same game address appears in two formats. Firebase **Authorized domains** takes the bare hostname. The Worker's `APP_ORIGINS` takes the full origin with scheme and any port. The browser's Firebase `authDomain` is the Firebase helper host. A Firebase project ID mismatch between the browser and Worker leads to a successful popup followed by API authentication failure. [Public Web config template](../config/firebase.env.example) · [Repository protocol](PROTOCOL.md)
+   Open a Pull Request into `main` on GitHub. **Pull request checks** ([ci.yml](../.github/workflows/ci.yml)) runs automatically for free—without any cloud secrets—and executes lint, typecheck, unit, workerd integration, build, docs, and Playwright browser tests.
+2. **Merge the Pull Request into `main`** once the `verify` check is green. Merging updates `main` without auto-deploying.
+3. **Deploy to Cloudflare preview from GitHub Actions:**
+   - Open **Actions → Deploy Cloudflare → Run workflow**.
+   - **Use workflow from:** `Branch: main`
+   - **Deployment environment (`target`):** `preview`
+   - **Exact selected main commit SHA (`release_sha`):** leave blank for preview (or paste the full 40-character SHA).
+   - Click **Run workflow**.
+   - The workflow automatically re-verifies `main` protection, runs the full CI `verify` suite, builds the web app with the `preview` Firebase variables, validates assets and Wrangler config, deploys `pandemicgame-preview` to Cloudflare Workers Free, and runs post-deploy smoke checks (`/api/health`, JSON 404, SPA deep link, and test-identity rejection).
+4. **Deploying to production later (after T18 gates pass):**
+   - Create a separate production Firebase Spark project, Microsoft Entra app registration, Cloudflare API token, `PANDEMIC_PRODUCTION_FIREBASE_PROJECT_ID` repository variable, and `production` GitHub Environment.
+   - As repository owner, run **Actions → Deploy Cloudflare → Run workflow** on `main` with `target: production` and `release_sha` set to the exact 40-character commit SHA verified in preview. See [Production and rollback](CLOUDFLARE.md#production-and-rollback).
 
 ### Optional local sign-in check
 
@@ -67,52 +143,16 @@ The same game address appears in two formats. Firebase **Authorized domains** ta
 
 3. From the repository root, run `npm ci` and `npm run dev`. Open `http://localhost:5173/login` in Chromium. Use the same hostname in the browser, Firebase authorized domains, and `APP_ORIGINS`. Check Google and Microsoft in separate browser profiles or sign out between tests. Use the regular local dev entry for real Firebase authentication. [Local development](LOCAL_DEV.md) · [Wrangler local variables](https://developers.cloudflare.com/workers/configuration/secrets/#local-development-with-secrets)
 
-## 5. Set up the GitHub deployment environment
+## 7. Verify preview before moving to production
 
-1. Protect `main` in the canonical PandemicGame repository with branch
-   protection or a ruleset. Keep the deployment workflow on reviewed
-   `main`. The workflow checks the repository ID and requires a protected
-   `main` ref for preview and production.
-2. Open **Settings → Environments** and create `preview`. Restrict the
-   environment's deployment branches to `main`. Configure the available
-   approval protections. Under **Environment variables**, add the seven
-   public values from the table above. The preview `APP_ORIGINS` must be
-   the exact HTTPS `workers.dev` origin for `pandemicgame-preview`. Under
-   **Settings → Secrets and variables → Actions → Variables**, add the
-   repository variable `PANDEMIC_PREVIEW_FIREBASE_PROJECT_ID` with that
-   Firebase project ID. Add `PANDEMIC_PRODUCTION_FIREBASE_PROJECT_ID` before
-   production, using the separate production Firebase project.
-   [GitHub deployment environments](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)
-3. Create an owner-controlled preview token in Cloudflare. Creating a Worker
-   requires Workers Admin or equivalent owner access. Use owner-controlled
-   bootstrap access for the first deployment, then narrow the credential to
-   the existing Worker where Cloudflare offers that scope. Set an expiry and
-   omit DNS or route privileges for the `workers.dev` setup. Add the token as
-   the `CLOUDFLARE_API_TOKEN` **environment secret** on `preview`. Keep this
-   secret name unset at repository and organization scope to prevent fallback.
-   [Cloudflare Worker roles](https://developers.cloudflare.com/workers/authorization/workers/#wrangler) ·
-   [Cloudflare API tokens](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)
-4. When the reviewed workflow is on `main`, open **Actions → Deploy Cloudflare
-   → Run workflow**. Select `main` and set `target` to `preview`. The workflow
-   runs the shared CI checks before using the preview credential. It builds
-   the web app with preview Firebase values, checks the assets and completes
-   a Wrangler dry run before deployment.
-5. If GitHub environment protections are unavailable, use the owner-controlled
-   local procedure in [the Cloudflare runbook](CLOUDFLARE.md#owner-controlled-local-deployment).
-   `npm run validate:deployment -- preview` checks the deployment path without
-   publishing. `npm run deploy:preview` requires the live settings and the
-   owner's scoped credential.
+- Open `https://<preview-worker-host>/api/health` and confirm JSON with `ok: true`, `buildSha` matching the workflow commit, and `protocolVersion: 1`. An unknown path under `/api/` must return a JSON 404. [Cloudflare runbook](CLOUDFLARE.md)
+- In separate browser profiles, sign in with **Google** and with a personal **Hotmail or Outlook** account. Create a room, join through an invite link, refresh, and verify the same seat reconnects. Repeat on desktop Chromium and tablet Safari/WebKit, then record sanitized results in [the T17 provider evidence sheet](evidence/T11.md#real-provider-staging-evidence-for-t17) and [T17 evidence](evidence/T17.md).
+- Common configuration errors:
+  - **Firebase unauthorized domain:** Compare the bare preview hostname in Firebase **Authorized domains** (no `https://`).
+  - **Microsoft `AADSTS50011`:** Compare the exact Firebase callback URL with the Entra registration's **Web** redirect URI.
+  - **HTTP `401` after login:** Confirm `VITE_FIREBASE_PROJECT_ID` and `FIREBASE_PROJECT_ID` are identical.
+  - **Lobby loads but realtime WebSocket fails:** Confirm `APP_ORIGINS` matches the exact `https://...` browser origin with no trailing slash.
+  [Firebase troubleshooting](https://firebase.google.com/docs/auth/faq-and-troubleshooting) · [Microsoft redirect troubleshooting](https://learn.microsoft.com/en-us/entra/identity-platform/reply-url)
 
-When production is authorized after T18, repeat the environment setup with
-separate production resources. For the workflow, the repository owner selects
-`target: production` and enters the full reviewed main commit SHA in
-`release_sha`. See [Production and rollback](CLOUDFLARE.md#production-and-rollback)
-for the equivalent local confirmation.
+For handoff, record the preview Firebase project ID, Worker name and hostname, Cloudflare account ID, and whether the GitHub `preview` environment is ready. Keep token and client secret values in their designated stores only.
 
-## 6. Verify preview before moving to production
-
-- Open `https://<preview-worker-host>/api/health` and check that it returns JSON with `ok`, `buildSha`, and `protocolVersion`. Match the build SHA to the reviewed workflow run. A missing route under `/api/` should return a JSON 404. [Cloudflare runbook](CLOUDFLARE.md)
-- In isolated browser profiles, sign in with Google and with a personal Hotmail or Outlook account. Create a room, join through an invite, refresh, and verify the same seat reconnects. Repeat on the actual preview origin with desktop Chromium and tablet Safari/WebKit. Record sanitized results in the staging evidence sheet after running the checks on the live preview. [T17 provider evidence sheet](evidence/T11.md#real-provider-staging-evidence-for-t17)
-- If Firebase reports an unauthorized domain, compare the exact browser hostname with the Firebase project's authorized domains. If Microsoft reports `AADSTS50011`, compare the full callback URL in Firebase with the Entra registration's **Web** redirect URI. If room requests return 401 after login, check the browser and Worker project IDs. If the lobby loads but realtime fails, check the full browser origin against `APP_ORIGINS`. [Firebase troubleshooting](https://firebase.google.com/docs/auth/faq-and-troubleshooting) · [Microsoft redirect troubleshooting](https://learn.microsoft.com/en-us/entra/identity-platform/reply-url)
-
-For the handoff, record the preview Firebase project ID, Worker name and hostname, Cloudflare account ID, and whether the GitHub preview environment is ready. These identifiers are enough to connect the reviewed workflow to the resources. Keep token and client secret values in their designated stores.

@@ -20,7 +20,7 @@ The [traceability matrix](TRACEABILITY.md) lists all 52 acceptance IDs. 38 pass 
 
 Complete these before the first preview dispatch. [Owner cloud setup](OWNER_CLOUD_SETUP.md) and the [deployment runbook](CLOUDFLARE.md) have the console steps.
 
-- [ ] Protect `main` in **Settings → Branches**. On 2026-11-07 the GitHub API reported `main` as unprotected. The Deploy Cloudflare workflow refuses every dispatch until `main` is protected.
+- [x] Protect `main` in **Settings → Rules → Rulesets** (active `basic` ruleset requires pull requests and the `verify` status check). The Deploy Cloudflare workflow requires a protected `main` branch on every dispatch.
 - [ ] Create the GitHub `preview` environment and restrict it to `main`. Add the public variables and the preview-only `CLOUDFLARE_API_TOKEN` secret. Register `PANDEMIC_PREVIEW_FIREBASE_PROJECT_ID` as a repository variable.
 - [ ] Create the preview Firebase Spark project with Google and Microsoft providers. Add the exact preview `workers.dev` hostname as an authorized domain.
 - [ ] Confirm the Cloudflare account is on Workers Free and that no paid plan or billing change was made.
